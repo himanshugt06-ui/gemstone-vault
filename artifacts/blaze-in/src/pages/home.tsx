@@ -18,20 +18,23 @@ interface CartItem extends Product {
   qty: number;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
 // ─── Product Data ─────────────────────────────────────────────────────────────
 const PRODUCTS: Product[] = [
-  { id: 1, name: "Eclipse Chain", price: 450, img: "/images/product-1.png" },
-  { id: 2, name: "Void Ring", price: 280, img: "/images/product-2.png" },
-  { id: 3, name: "Phantom Cuff", price: 520, img: "/images/product-3.png" },
-  { id: 4, name: "Neon Pendant", price: 390, img: "/images/product-4.png" },
-  { id: 5, name: "Onyx Studs", price: 210, img: "/images/product-5.png" },
-  { id: 6, name: "Serpent Ring", price: 340, img: "/images/product-6.png" },
+  { id: 1, name: "Eclipse Chain", price: 37500, img: "/images/product-1.png" },
+  { id: 2, name: "Void Ring", price: 23500, img: "/images/product-2.png" },
+  { id: 3, name: "Phantom Cuff", price: 43500, img: "/images/product-3.png" },
+  { id: 4, name: "Neon Pendant", price: 32500, img: "/images/product-4.png" },
+  { id: 5, name: "Onyx Studs", price: 17500, img: "/images/product-5.png" },
+  { id: 6, name: "Serpent Ring", price: 28500, img: "/images/product-6.png" },
 ];
 
 const FEATURED_PRODUCTS: Product[] = [
-  { id: 1, name: "Eclipse Chain", price: 450, img: "/images/product-1.png" },
-  { id: 2, name: "Void Ring", price: 280, img: "/images/product-2.png" },
-  { id: 3, name: "Phantom Cuff", price: 520, img: "/images/product-3.png" },
+  { id: 1, name: "Eclipse Chain", price: 37500, img: "/images/product-1.png" },
+  { id: 2, name: "Void Ring", price: 23500, img: "/images/product-2.png" },
+  { id: 3, name: "Phantom Cuff", price: 43500, img: "/images/product-3.png" },
 ];
 
 const INSTAGRAM_IMAGES = [
@@ -170,7 +173,7 @@ function CartDrawer({
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
-                        <span className="text-sm text-primary font-sans">${(item.price * item.qty).toLocaleString()}</span>
+                        <span className="text-sm text-primary font-sans">{inr(item.price * item.qty)}</span>
                       </div>
                     </div>
                   </div>
@@ -183,7 +186,7 @@ function CartDrawer({
               <div className="px-8 py-6 border-t border-border space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-xs uppercase tracking-widest text-muted-foreground">Subtotal</span>
-                  <span className="text-xl font-display text-primary">${subtotal.toLocaleString()}</span>
+                  <span className="text-xl font-display text-primary">{inr(subtotal)}</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground/60 uppercase tracking-widest">Shipping & taxes calculated at checkout</p>
                 <Button
@@ -278,7 +281,7 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
                     <div className="flex-1">
                       <p className="text-sm uppercase tracking-widest text-primary group-hover:text-white transition-colors">{p.name}</p>
                     </div>
-                    <span className="text-muted-foreground text-sm font-sans">${p.price}</span>
+                    <span className="text-muted-foreground text-sm font-sans">{inr(p.price)}</span>
                   </motion.div>
                 ))}
               </motion.div>
@@ -296,12 +299,196 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
   );
 }
 
+// ─── Product Detail Modal ─────────────────────────────────────────────────────
+const PRODUCT_DETAILS: Record<number, { material: string; desc: string; sizes?: string[]; lengths?: string[] }> = {
+  1: { material: "925 Sterling Silver", desc: "A bold Cuban-link chain with mirror-polished chrome finish. Designed for maximum presence with minimal effort.", lengths: ['16"', '18"', '20"', '24"'] },
+  2: { material: "Sterling Silver + Black Onyx", desc: "A statement signet ring carved from solid sterling silver with a deep black onyx stone set at centre.", sizes: ["6", "7", "8", "9", "10", "11"] },
+  3: { material: "Oxidised Silver", desc: "An architectural open cuff with asymmetric edges and satin finish. Fits most wrists with adjustable opening.", lengths: ["S / 15cm", "M / 17cm", "L / 19cm"] },
+  4: { material: "Sterling Silver", desc: "A geometric pendant inspired by void geometry. Hangs on a delicate 18\" box chain included in the set.", lengths: ['16"', '18"', '20"'] },
+  5: { material: "Sterling Silver + Jet Black Enamel", desc: "Minimal circular studs with deep black enamel inlay. Lightweight, understated, and unmistakably Blaze.", sizes: ["One Size"] },
+  6: { material: "925 Silver + Hand-Engraved", desc: "A serpent-motif ring with hand-engraved scales and a matte oxidised finish. A limited drop — only 50 units.", sizes: ["6", "7", "8", "9", "10", "11"] },
+};
+
+function ProductDetailModal({
+  product,
+  onClose,
+  onAddToCart,
+}: {
+  product: Product | null;
+  onClose: () => void;
+  onAddToCart: (p: Product) => void;
+}) {
+  const [qty, setQty] = useState(1);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [addedFeedback, setAddedFeedback] = useState(false);
+
+  useEffect(() => {
+    setQty(1);
+    setSelectedOption(null);
+    setAddedFeedback(false);
+    if (product) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+    return () => { document.body.style.overflow = ""; };
+  }, [product]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const detail = product ? PRODUCT_DETAILS[product.id] : null;
+  const options = detail?.sizes ?? detail?.lengths ?? [];
+  const optionLabel = detail?.sizes ? "Size" : "Length";
+
+  const handleAddToCart = () => {
+    if (!product) return;
+    for (let i = 0; i < qty; i++) onAddToCart(product);
+    setAddedFeedback(true);
+    setTimeout(() => setAddedFeedback(false), 2000);
+  };
+
+  return (
+    <AnimatePresence>
+      {product && (
+        <>
+          <motion.div
+            key="pdp-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80]"
+          />
+          <motion.div
+            key="pdp-modal"
+            initial={{ opacity: 0, y: 40, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 280, damping: 32 }}
+            className="fixed inset-x-4 top-[5vh] md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-4xl bg-[#0a0a0a] border border-border z-[90] overflow-y-auto max-h-[90vh]"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2">
+              {/* Image panel */}
+              <div className="relative aspect-square bg-card overflow-hidden">
+                <img src={product.img} alt={product.name} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+                <div className="absolute top-4 left-4 px-3 py-1 border border-accent/40 bg-accent/10">
+                  <span className="text-[9px] uppercase tracking-[0.3em] text-accent">Limited Piece</span>
+                </div>
+              </div>
+
+              {/* Info panel */}
+              <div className="flex flex-col p-8 md:p-10 relative">
+                <button
+                  onClick={onClose}
+                  className="absolute top-6 right-6 text-muted-foreground hover:text-primary transition-colors"
+                  data-testid="pdp-close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="flex-1">
+                  <p className="text-[10px] uppercase tracking-[0.4em] text-accent mb-3">{detail?.material}</p>
+                  <h2 className="text-3xl md:text-4xl font-display text-primary mb-2 leading-tight">{product.name}</h2>
+                  <p className="text-2xl font-display text-primary mb-6">{inr(product.price)}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mb-1">Incl. of all taxes · Free shipping over ₹5,000</p>
+
+                  <div className="w-12 h-px bg-border my-6" />
+
+                  <p className="text-muted-foreground text-sm leading-relaxed mb-8">{detail?.desc}</p>
+
+                  {/* Size / Length selector */}
+                  {options.length > 0 && (
+                    <div className="mb-8">
+                      <p className="text-[10px] uppercase tracking-widest text-primary mb-3">
+                        {optionLabel}
+                        {selectedOption && <span className="text-accent ml-2">— {selectedOption}</span>}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {options.map(opt => (
+                          <button
+                            key={opt}
+                            onClick={() => setSelectedOption(opt)}
+                            className={`px-4 h-10 border text-[11px] uppercase tracking-widest transition-all duration-200 ${
+                              selectedOption === opt
+                                ? "border-primary text-primary bg-primary/10"
+                                : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
+                            }`}
+                            data-testid={`pdp-option-${opt}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quantity */}
+                  <div className="mb-8">
+                    <p className="text-[10px] uppercase tracking-widest text-primary mb-3">Quantity</p>
+                    <div className="flex items-center border border-border w-fit">
+                      <button
+                        onClick={() => setQty(q => Math.max(1, q - 1))}
+                        className="w-11 h-11 flex items-center justify-center hover:bg-card transition-colors text-muted-foreground hover:text-primary"
+                        data-testid="pdp-qty-decrease"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="w-12 h-11 flex items-center justify-center text-sm text-primary font-sans border-x border-border">{qty}</span>
+                      <button
+                        onClick={() => setQty(q => q + 1)}
+                        className="w-11 h-11 flex items-center justify-center hover:bg-card transition-colors text-muted-foreground hover:text-primary"
+                        data-testid="pdp-qty-increase"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CTAs */}
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest pt-4">Total: {inr(product.price * qty)}</p>
+                  <Button
+                    onClick={handleAddToCart}
+                    className={`w-full h-13 rounded-none uppercase tracking-widest text-xs font-sans transition-all duration-300 h-12 ${
+                      addedFeedback
+                        ? "bg-accent/20 text-accent border border-accent/50"
+                        : "bg-primary text-primary-foreground hover:bg-white"
+                    }`}
+                    data-testid="pdp-add-to-cart"
+                  >
+                    {addedFeedback ? (
+                      <><Check className="w-4 h-4 mr-2" /> Added to Cart</>
+                    ) : (
+                      <><ShoppingCart className="w-4 h-4 mr-2" /> Add to Cart</>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => { handleAddToCart(); onClose(); }}
+                    className="w-full h-12 rounded-none uppercase tracking-widest text-xs font-sans bg-accent/10 text-accent border border-accent/40 hover:bg-accent hover:text-accent-foreground transition-all duration-300"
+                    data-testid="pdp-buy-now"
+                  >
+                    Buy Now — {inr(product.price * qty)}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Home() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<Set<number>>(new Set());
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [newsletterState, setNewsletterState] = useState<"idle" | "success">("idle");
   const [email, setEmail] = useState("");
@@ -358,6 +545,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-black text-foreground overflow-hidden font-sans">
+
+      {/* Product Detail Modal */}
+      <ProductDetailModal
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+        onAddToCart={(p) => { addToCart(p); }}
+      />
 
       {/* Search Overlay */}
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -581,15 +775,23 @@ export default function Home() {
                 className="group flex flex-col"
                 data-testid={`product-card-${prod.id}`}
               >
-                <div className="relative aspect-square mb-5 bg-card border border-border overflow-hidden">
+                <div
+                  className="relative aspect-square mb-5 bg-card border border-border overflow-hidden cursor-pointer"
+                  onClick={() => setSelectedProduct(prod)}
+                  data-testid={`button-open-pdp-${prod.id}`}
+                >
                   <img
                     src={prod.img}
                     alt={prod.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
+                  {/* View detail hint */}
+                  <div className="absolute top-4 left-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <span className="text-[9px] uppercase tracking-[0.3em] text-white/70 bg-black/50 backdrop-blur-sm px-2 py-1">View Details</span>
+                  </div>
                   {/* Wishlist */}
                   <button
-                    onClick={() => toggleWishlist(prod.id)}
+                    onClick={(e) => { e.stopPropagation(); toggleWishlist(prod.id); }}
                     className="absolute top-4 right-4 z-10 w-10 h-10 bg-black/50 backdrop-blur-md border border-border flex items-center justify-center hover:border-accent transition-all duration-300"
                     data-testid={`button-wishlist-${prod.id}`}
                     aria-label="Toggle wishlist"
@@ -599,7 +801,7 @@ export default function Home() {
                   {/* Add to Cart slide-up */}
                   <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
                     <Button
-                      onClick={() => addToCart(prod)}
+                      onClick={(e) => { e.stopPropagation(); addToCart(prod); }}
                       className="w-full bg-primary text-primary-foreground hover:bg-white rounded-none uppercase tracking-widest text-[11px] h-11 font-sans"
                       data-testid={`button-addtocart-${prod.id}`}
                     >
@@ -609,7 +811,7 @@ export default function Home() {
                 </div>
                 <div className="flex justify-between items-center px-1">
                   <h4 className="font-sans uppercase tracking-widest text-[11px] text-primary">{prod.name}</h4>
-                  <span className="text-muted-foreground text-sm font-sans">${prod.price}</span>
+                  <span className="text-muted-foreground text-sm font-sans">{inr(prod.price)}</span>
                 </div>
               </motion.div>
             ))}
@@ -688,7 +890,7 @@ export default function Home() {
                       className="w-full h-10 rounded-none bg-transparent border border-primary/50 hover:bg-primary hover:text-primary-foreground uppercase tracking-widest text-[10px] transition-all duration-300"
                       data-testid={`button-tilt-addtocart-${prod.id}`}
                     >
-                      Add — ${prod.price}
+                      Add — {inr(prod.price)}
                     </Button>
                   </div>
                 </div>
