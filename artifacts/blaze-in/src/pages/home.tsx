@@ -23,18 +23,18 @@ const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
 // ─── Product Data ─────────────────────────────────────────────────────────────
 const PRODUCTS: Product[] = [
-  { id: 1, name: "Eclipse Chain", price: 37500, img: "/images/product-1.png" },
-  { id: 2, name: "Void Ring", price: 23500, img: "/images/product-2.png" },
-  { id: 3, name: "Phantom Cuff", price: 43500, img: "/images/product-3.png" },
-  { id: 4, name: "Neon Pendant", price: 32500, img: "/images/product-4.png" },
-  { id: 5, name: "Onyx Studs", price: 17500, img: "/images/product-5.png" },
-  { id: 6, name: "Serpent Ring", price: 28500, img: "/images/product-6.png" },
+  { id: 1, name: "Eclipse Chain", price: 8999, img: "/images/product-1.png" },
+  { id: 2, name: "Void Ring", price: 4999, img: "/images/product-2.png" },
+  { id: 3, name: "Phantom Cuff", price: 11999, img: "/images/product-3.png" },
+  { id: 4, name: "Neon Pendant", price: 5499, img: "/images/product-4.png" },
+  { id: 5, name: "Onyx Studs", price: 3499, img: "/images/product-5.png" },
+  { id: 6, name: "Serpent Ring", price: 6999, img: "/images/product-6.png" },
 ];
 
 const FEATURED_PRODUCTS: Product[] = [
-  { id: 1, name: "Eclipse Chain", price: 37500, img: "/images/product-1.png" },
-  { id: 2, name: "Void Ring", price: 23500, img: "/images/product-2.png" },
-  { id: 3, name: "Phantom Cuff", price: 43500, img: "/images/product-3.png" },
+  { id: 1, name: "Eclipse Chain", price: 8999, img: "/images/product-1.png" },
+  { id: 2, name: "Void Ring", price: 4999, img: "/images/product-2.png" },
+  { id: 3, name: "Phantom Cuff", price: 11999, img: "/images/product-3.png" },
 ];
 
 const INSTAGRAM_IMAGES = [
