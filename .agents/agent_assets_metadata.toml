@@ -60,3 +60,45 @@ id = "P3f6_qx7FxwCLSogjNNpd"
 uri = "file://artifacts/blaze-in/public/images/product-6.png"
 type = "image"
 title = "Serpent Ring product"
+
+[[generated]]
+id = "UIv-T-8RrdMF3mAoVOS1p"
+uri = "file://artifacts/blaze-in/public/images/insta-1.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "lhF0TIfv-eTIWVDSCUNNa"
+uri = "file://artifacts/blaze-in/public/images/insta-2.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "XCpivnlggpoV8Jzb7k9nS"
+uri = "file://artifacts/blaze-in/public/images/insta-3.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "7mGDv4rykBlTK6JxmD65G"
+uri = "file://artifacts/blaze-in/public/images/insta-4.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "dC2cyvxCwrqzhxoCyHDMW"
+uri = "file://artifacts/blaze-in/public/images/insta-5.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "ibrEzRr0Jhy_9xNtPy7j0"
+uri = "file://artifacts/blaze-in/public/images/insta-6.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "OF6TanoJ5NmfzJVY8Yz7E"
+uri = "file://artifacts/blaze-in/public/images/editorial-hero.png"
+type = "image"
+title = "generated_image"

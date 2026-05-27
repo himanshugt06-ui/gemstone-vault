@@ -1,11 +1,49 @@
-import { useState, useEffect, useRef } from "react";
-import { Search, Heart, ShoppingCart, ArrowDown, Star, Instagram } from "lucide-react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Search, Heart, ShoppingCart, ArrowDown, Star, Instagram, X, Plus, Minus, Trash2, Check } from "lucide-react";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-// --- Custom 3D Tilt Card Component ---
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface Product {
+  id: number;
+  name: string;
+  price: number;
+  img: string;
+}
+
+interface CartItem extends Product {
+  qty: number;
+}
+
+// ─── Product Data ─────────────────────────────────────────────────────────────
+const PRODUCTS: Product[] = [
+  { id: 1, name: "Eclipse Chain", price: 450, img: "/images/product-1.png" },
+  { id: 2, name: "Void Ring", price: 280, img: "/images/product-2.png" },
+  { id: 3, name: "Phantom Cuff", price: 520, img: "/images/product-3.png" },
+  { id: 4, name: "Neon Pendant", price: 390, img: "/images/product-4.png" },
+  { id: 5, name: "Onyx Studs", price: 210, img: "/images/product-5.png" },
+  { id: 6, name: "Serpent Ring", price: 340, img: "/images/product-6.png" },
+];
+
+const FEATURED_PRODUCTS: Product[] = [
+  { id: 1, name: "Eclipse Chain", price: 450, img: "/images/product-1.png" },
+  { id: 2, name: "Void Ring", price: 280, img: "/images/product-2.png" },
+  { id: 3, name: "Phantom Cuff", price: 520, img: "/images/product-3.png" },
+];
+
+const INSTAGRAM_IMAGES = [
+  "/images/insta-1.png",
+  "/images/insta-2.png",
+  "/images/insta-3.png",
+  "/images/insta-4.png",
+  "/images/insta-5.png",
+  "/images/insta-6.png",
+];
+
+// ─── 3D Tilt Card ─────────────────────────────────────────────────────────────
 function TiltCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [rotateX, setRotateX] = useState(0);
@@ -16,17 +54,8 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
     const rect = ref.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const rotateX = ((y - centerY) / centerY) * -10;
-    const rotateY = ((x - centerX) / centerX) * 10;
-    setRotateX(rotateX);
-    setRotateY(rotateY);
-  };
-
-  const handleMouseLeave = () => {
-    setRotateX(0);
-    setRotateY(0);
+    setRotateX(((y - rect.height / 2) / rect.height) * -12);
+    setRotateY(((x - rect.width / 2) / rect.width) * 12);
   };
 
   return (
@@ -34,7 +63,7 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
       <motion.div
         ref={ref}
         onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        onMouseLeave={() => { setRotateX(0); setRotateY(0); }}
         animate={{ rotateX, rotateY }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         style={{ transformStyle: "preserve-3d" }}
@@ -46,14 +75,242 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
   );
 }
 
-// --- Main Page Component ---
+// ─── Cart Drawer ──────────────────────────────────────────────────────────────
+function CartDrawer({
+  open,
+  onClose,
+  items,
+  onQtyChange,
+  onRemove,
+}: {
+  open: boolean;
+  onClose: () => void;
+  items: CartItem[];
+  onQtyChange: (id: number, delta: number) => void;
+  onRemove: (id: number) => void;
+}) {
+  const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="cart-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60]"
+          />
+          <motion.aside
+            key="cart-drawer"
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 300, damping: 35 }}
+            className="fixed top-0 right-0 h-full w-full max-w-md bg-[#0a0a0a] border-l border-border z-[70] flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-8 py-6 border-b border-border">
+              <span className="text-xs uppercase tracking-widest text-primary font-sans">
+                Cart — {items.reduce((s, i) => s + i.qty, 0)} items
+              </span>
+              <button onClick={onClose} className="text-muted-foreground hover:text-primary transition-colors" data-testid="cart-close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Items */}
+            <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+              {items.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center">
+                  <ShoppingCart className="w-12 h-12 text-muted-foreground mb-4 opacity-30" />
+                  <p className="text-muted-foreground text-sm uppercase tracking-widest">Your cart is empty</p>
+                  <p className="text-muted-foreground/50 text-xs mt-2">Add pieces to begin</p>
+                </div>
+              ) : (
+                items.map(item => (
+                  <div key={item.id} className="flex gap-4 items-start" data-testid={`cart-item-${item.id}`}>
+                    <div className="w-20 h-20 bg-card border border-border overflow-hidden flex-shrink-0">
+                      <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start mb-3">
+                        <h4 className="text-sm uppercase tracking-widest text-primary font-sans">{item.name}</h4>
+                        <button
+                          onClick={() => onRemove(item.id)}
+                          className="text-muted-foreground hover:text-red-400 transition-colors ml-2"
+                          data-testid={`remove-item-${item.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center border border-border">
+                          <button
+                            onClick={() => onQtyChange(item.id, -1)}
+                            className="w-8 h-8 flex items-center justify-center hover:bg-card transition-colors text-muted-foreground hover:text-primary"
+                            data-testid={`qty-decrease-${item.id}`}
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-8 h-8 flex items-center justify-center text-sm text-primary font-sans">{item.qty}</span>
+                          <button
+                            onClick={() => onQtyChange(item.id, 1)}
+                            className="w-8 h-8 flex items-center justify-center hover:bg-card transition-colors text-muted-foreground hover:text-primary"
+                            data-testid={`qty-increase-${item.id}`}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <span className="text-sm text-primary font-sans">${(item.price * item.qty).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            {items.length > 0 && (
+              <div className="px-8 py-6 border-t border-border space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs uppercase tracking-widest text-muted-foreground">Subtotal</span>
+                  <span className="text-xl font-display text-primary">${subtotal.toLocaleString()}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground/60 uppercase tracking-widest">Shipping & taxes calculated at checkout</p>
+                <Button
+                  className="w-full h-14 rounded-none bg-primary text-primary-foreground hover:bg-white uppercase tracking-widest text-xs font-sans"
+                  data-testid="checkout-button"
+                >
+                  Proceed to Checkout
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={onClose}
+                  className="w-full h-10 rounded-none uppercase tracking-widest text-xs text-muted-foreground hover:text-primary font-sans"
+                >
+                  Continue Shopping
+                </Button>
+              </div>
+            )}
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── Search Overlay ───────────────────────────────────────────────────────────
+function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+      setQuery("");
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const filtered = query.length > 1
+    ? PRODUCTS.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
+    : [];
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="search-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/95 backdrop-blur-md z-[80] flex flex-col"
+        >
+          <div className="container mx-auto px-6 pt-32 max-w-2xl">
+            <div className="flex items-center gap-4 border-b border-primary pb-4 mb-8">
+              <Search className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search pieces..."
+                className="flex-1 bg-transparent text-2xl md:text-3xl font-display text-primary outline-none placeholder:text-muted-foreground/40 tracking-wide"
+                data-testid="search-input"
+              />
+              <button onClick={onClose} className="text-muted-foreground hover:text-primary transition-colors ml-2" data-testid="search-close">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {filtered.length > 0 ? (
+              <motion.div
+                initial="hidden"
+                animate="visible"
+                variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
+                className="space-y-3"
+              >
+                {filtered.map(p => (
+                  <motion.div
+                    key={p.id}
+                    variants={{ hidden: { opacity: 0, x: -10 }, visible: { opacity: 1, x: 0 } }}
+                    className="flex items-center gap-4 p-4 border border-border hover:border-primary/50 transition-colors cursor-pointer group"
+                    data-testid={`search-result-${p.id}`}
+                  >
+                    <img src={p.img} alt={p.name} className="w-12 h-12 object-cover bg-card" />
+                    <div className="flex-1">
+                      <p className="text-sm uppercase tracking-widest text-primary group-hover:text-white transition-colors">{p.name}</p>
+                    </div>
+                    <span className="text-muted-foreground text-sm font-sans">${p.price}</span>
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : query.length > 1 ? (
+              <p className="text-muted-foreground text-sm uppercase tracking-widest text-center py-12">No pieces found for "{query}"</p>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground/40 text-xs uppercase tracking-widest">Type to search our collection</p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [cartCount, setCartCount] = useState(0);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [wishlist, setWishlist] = useState<Set<number>>(new Set());
+  const [cartOpen, setCartOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [newsletterState, setNewsletterState] = useState<"idle" | "success">("idle");
+  const [email, setEmail] = useState("");
+
   const { scrollYProgress } = useScroll();
-  const heroY = useTransform(scrollYProgress, [0, 1], ["0%", "50%"]);
-  
-  const [emblaRef] = useEmblaCarousel({ loop: true, align: "start" });
+  const heroY = useTransform(scrollYProgress, [0, 0.4], ["0%", "30%"]);
+
+  const autoplay = useRef(Autoplay({ delay: 3500, stopOnInteraction: false }));
+  const [emblaRef] = useEmblaCarousel({ loop: true, align: "start" }, [autoplay.current]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -61,99 +318,206 @@ export default function Home() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const addToCart = () => setCartCount(c => c + 1);
+  const addToCart = useCallback((product: Product) => {
+    setCartItems(prev => {
+      const existing = prev.find(i => i.id === product.id);
+      if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { ...product, qty: 1 }];
+    });
+    setCartOpen(true);
+  }, []);
+
+  const changeQty = useCallback((id: number, delta: number) => {
+    setCartItems(prev => prev
+      .map(i => i.id === id ? { ...i, qty: i.qty + delta } : i)
+      .filter(i => i.qty > 0)
+    );
+  }, []);
+
+  const removeFromCart = useCallback((id: number) => {
+    setCartItems(prev => prev.filter(i => i.id !== id));
+  }, []);
+
+  const toggleWishlist = useCallback((id: number) => {
+    setWishlist(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleNewsletter = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setNewsletterState("success");
+    setEmail("");
+  };
+
+  const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
 
   return (
     <div className="min-h-screen bg-black text-foreground overflow-hidden font-sans">
-      
-      {/* Navbar */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-black/80 backdrop-blur-md border-b border-border py-4" : "bg-transparent py-6"}`}>
+
+      {/* Search Overlay */}
+      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      {/* Cart Drawer */}
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        items={cartItems}
+        onQtyChange={changeQty}
+        onRemove={removeFromCart}
+      />
+
+      {/* ── Navbar ───────────────────────────────────────────────────── */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled ? "bg-black/85 backdrop-blur-md border-b border-border py-4" : "bg-transparent py-6"}`}>
         <div className="container mx-auto px-6 flex items-center justify-between">
           <div className="text-2xl font-display font-semibold tracking-widest text-primary">BLAZE.IN</div>
           <div className="hidden md:flex items-center space-x-8 text-sm uppercase tracking-wider text-muted-foreground">
-            <a href="#" className="hover:text-primary transition-colors">Shop</a>
-            <a href="#" className="hover:text-primary transition-colors">Collections</a>
-            <a href="#" className="hover:text-primary transition-colors text-accent">Drops</a>
-            <a href="#" className="hover:text-primary transition-colors">About</a>
+            <a href="#collections" className="hover:text-primary transition-colors">Collections</a>
+            <a href="#bestsellers" className="hover:text-primary transition-colors">Shop</a>
+            <a href="#drops" className="hover:text-primary transition-colors text-accent">Drops</a>
+            <a href="#about" className="hover:text-primary transition-colors">About</a>
           </div>
-          <div className="flex items-center space-x-6 text-muted-foreground">
-            <button className="hover:text-primary transition-colors"><Search className="w-5 h-5" /></button>
-            <button className="hover:text-primary transition-colors"><Heart className="w-5 h-5" /></button>
-            <button className="hover:text-primary transition-colors relative">
+          <div className="flex items-center space-x-5 text-muted-foreground">
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="hover:text-primary transition-colors"
+              data-testid="button-search"
+              aria-label="Open search"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <button
+              className="hover:text-primary transition-colors relative"
+              data-testid="button-wishlist"
+              aria-label="Wishlist"
+            >
+              <Heart className={`w-5 h-5 ${wishlist.size > 0 ? "text-accent fill-accent" : ""}`} />
+              {wishlist.size > 0 && (
+                <span className="absolute -top-2 -right-2 bg-accent text-accent-foreground text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {wishlist.size}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setCartOpen(true)}
+              className="hover:text-primary transition-colors relative"
+              data-testid="button-cart"
+              aria-label="Open cart"
+            >
               <ShoppingCart className="w-5 h-5" />
               {cartCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-accent text-accent-foreground text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {cartCount}
-                </span>
+                <AnimatePresence>
+                  <motion.span
+                    key={cartCount}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-2 -right-2 bg-accent text-accent-foreground text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center"
+                  >
+                    {cartCount}
+                  </motion.span>
+                </AnimatePresence>
               )}
             </button>
           </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
+      {/* ── Hero ─────────────────────────────────────────────────────── */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         <motion.div style={{ y: heroY }} className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-neutral-900 via-black to-black opacity-80" />
-          <div className="orb-glow top-[20%] left-[20%]" />
-          <div className="orb-glow bottom-[10%] right-[20%] animation-delay-2000" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_40%,#0d1b3e_0%,#000_70%)]" />
+          <div className="orb-glow" style={{ top: "20%", left: "15%" }} />
+          <div className="orb-glow" style={{ bottom: "15%", right: "20%", animationDelay: "2s" }} />
+          <div className="orb-glow" style={{ top: "55%", left: "60%", width: "200px", height: "200px", animationDelay: "1s" }} />
         </motion.div>
-        
+
         <div className="relative z-10 text-center px-4 max-w-5xl mx-auto mt-20">
-          <motion.h1 
-            initial={{ opacity: 0, y: 30 }}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: "easeOut" }}
-            className="text-6xl md:text-8xl lg:text-9xl font-display leading-tight tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white to-neutral-500 mb-6"
+            transition={{ duration: 0.6 }}
+            className="text-xs uppercase tracking-[0.4em] text-accent mb-8 font-sans"
           >
-            Crafted for the<br/>uncommon.
+            Underground Luxury Jewellery
+          </motion.div>
+          <motion.h1
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, ease: "easeOut", delay: 0.1 }}
+            className="text-6xl md:text-8xl lg:text-[7rem] font-display leading-[0.95] tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-neutral-200 to-neutral-600 mb-8"
+          >
+            Crafted for the<br />uncommon.
           </motion.h1>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 0.3 }}
-            className="text-lg md:text-xl text-muted-foreground uppercase tracking-widest mb-12 max-w-2xl mx-auto"
+            transition={{ duration: 1, delay: 0.4 }}
+            className="text-sm md:text-base text-muted-foreground uppercase tracking-[0.3em] mb-14 max-w-lg mx-auto leading-relaxed"
           >
             Limited jewellery pieces designed for modern fashion culture.
           </motion.p>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.6 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-6"
+            transition={{ duration: 0.8, delay: 0.7 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-5"
           >
-            <Button size="lg" className="w-full sm:w-auto bg-transparent border border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-none uppercase tracking-widest h-14 px-10 transition-all duration-500">
-              Shop Collection
-            </Button>
-            <Button size="lg" className="w-full sm:w-auto bg-accent text-accent-foreground hover:bg-accent/80 hover:shadow-[0_0_20px_hsl(var(--accent)/0.5)] rounded-none uppercase tracking-widest h-14 px-10 transition-all duration-500 border-none">
-              Explore Drops
-            </Button>
+            <a href="#bestsellers">
+              <Button
+                size="lg"
+                className="w-full sm:w-auto bg-transparent border border-primary/60 text-primary hover:bg-primary hover:text-primary-foreground rounded-none uppercase tracking-widest h-14 px-12 transition-all duration-500 text-xs"
+                data-testid="button-shop-collection"
+              >
+                Shop Collection
+              </Button>
+            </a>
+            <a href="#drops">
+              <Button
+                size="lg"
+                className="w-full sm:w-auto bg-accent/10 text-accent border border-accent/40 hover:bg-accent hover:text-accent-foreground hover:shadow-[0_0_30px_hsl(var(--accent)/0.4)] rounded-none uppercase tracking-widest h-14 px-12 transition-all duration-500 text-xs"
+                data-testid="button-explore-drops"
+              >
+                Explore Drops
+              </Button>
+            </a>
           </motion.div>
         </div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.5, duration: 1 }}
+          transition={{ delay: 1.8, duration: 1 }}
           className="absolute bottom-10 left-1/2 -translate-x-1/2 text-muted-foreground flex flex-col items-center gap-2"
         >
-          <span className="text-xs uppercase tracking-widest">Scroll</span>
+          <span className="text-[10px] uppercase tracking-[0.3em]">Scroll</span>
           <ArrowDown className="w-4 h-4 animate-bounce" />
         </motion.div>
       </section>
 
-      {/* Featured Collections */}
-      <section className="py-32 px-6 bg-black relative">
+      {/* ── Featured Collections ──────────────────────────────────────── */}
+      <section id="collections" className="py-32 px-6 bg-black">
         <div className="container mx-auto">
-          <motion.div 
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-20"
+          >
+            <p className="text-xs uppercase tracking-[0.4em] text-accent mb-4">Explore</p>
+            <h2 className="text-4xl md:text-5xl font-display text-primary">Collections</h2>
+          </motion.div>
+
+          <motion.div
             initial="hidden"
             whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={{
-              hidden: {},
-              visible: { transition: { staggerChildren: 0.1 } }
-            }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            viewport={{ once: true, margin: "-80px" }}
+            variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
           >
             {[
               { title: "Chains", img: "/images/chain-collection.png" },
@@ -161,79 +525,91 @@ export default function Home() {
               { title: "Earrings", img: "/images/earring-collection.png" },
               { title: "Limited Drops", img: "/images/drops-collection.png" }
             ].map((col, i) => (
-              <motion.div 
+              <motion.div
                 key={i}
                 variants={{
-                  hidden: { opacity: 0, y: 50 },
+                  hidden: { opacity: 0, y: 40 },
                   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
                 }}
+                whileHover={{ y: -4 }}
                 className="group relative aspect-[3/4] overflow-hidden bg-card border border-border flex items-end p-6 cursor-pointer"
+                data-testid={`collection-card-${i}`}
               >
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
-                <img 
-                  src={col.img} 
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent z-10" />
+                <img
+                  src={col.img}
                   alt={col.title}
-                  className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700 grayscale-[20%]"
+                  className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
                 />
-                <h3 className="relative z-20 text-2xl font-display tracking-widest text-primary uppercase">{col.title}</h3>
-                <div className="absolute inset-0 border border-transparent group-hover:border-accent/30 transition-colors duration-500 z-30" />
+                <div className="relative z-20">
+                  <h3 className="text-xl font-display tracking-widest text-primary uppercase mb-1">{col.title}</h3>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground group-hover:text-accent transition-colors duration-300">View All</p>
+                </div>
+                <div className="absolute inset-0 border border-transparent group-hover:border-accent/20 transition-colors duration-500 z-30 pointer-events-none" />
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0"
+                  style={{ background: "radial-gradient(ellipse at center, hsl(var(--accent)/0.08) 0%, transparent 70%)" }} />
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Best Sellers */}
-      <section className="py-32 px-6 bg-neutral-950 border-y border-border">
+      {/* ── Best Sellers ──────────────────────────────────────────────── */}
+      <section id="bestsellers" className="py-32 px-6 bg-neutral-950 border-y border-border">
         <div className="container mx-auto">
           <div className="flex items-end justify-between mb-16">
-            <div>
-              <h2 className="text-4xl md:text-5xl font-display text-primary mb-4">The Signatures</h2>
-              <p className="text-muted-foreground uppercase tracking-widest text-sm">Most coveted pieces</p>
-            </div>
-            <a href="#" className="hidden md:block uppercase tracking-widest text-sm text-primary hover:text-accent transition-colors border-b border-primary hover:border-accent pb-1">View All</a>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              <p className="text-xs uppercase tracking-[0.4em] text-accent mb-3">Most Coveted</p>
+              <h2 className="text-4xl md:text-5xl font-display text-primary">The Signatures</h2>
+            </motion.div>
+            <a href="#" className="hidden md:block uppercase tracking-widest text-xs text-primary hover:text-accent transition-colors border-b border-primary/50 hover:border-accent pb-1">View All</a>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              { name: "Eclipse Chain", price: "$450", img: "/images/product-1.png" },
-              { name: "Void Ring", price: "$280", img: "/images/product-2.png" },
-              { name: "Phantom Cuff", price: "$520", img: "/images/product-3.png" },
-              { name: "Neon Pendant", price: "$390", img: "/images/product-4.png" },
-              { name: "Onyx Studs", price: "$210", img: "/images/product-5.png" },
-              { name: "Serpent Ring", price: "$340", img: "/images/product-6.png" }
-            ].map((prod, i) => (
-              <motion.div 
-                key={i}
+            {PRODUCTS.map((prod, i) => (
+              <motion.div
+                key={prod.id}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
+                transition={{ duration: 0.5, delay: i * 0.08 }}
                 className="group flex flex-col"
+                data-testid={`product-card-${prod.id}`}
               >
-                <div className="relative aspect-square mb-6 bg-card border border-border overflow-hidden">
-                  <img 
-                    src={prod.img} 
+                <div className="relative aspect-square mb-5 bg-card border border-border overflow-hidden">
+                  <img
+                    src={prod.img}
                     alt={prod.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
-                  <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <button className="w-10 h-10 bg-black/50 backdrop-blur-md border border-border flex items-center justify-center hover:text-accent hover:border-accent transition-colors">
-                      <Heart className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
-                    <Button 
-                      onClick={addToCart}
-                      className="w-full bg-primary text-primary-foreground hover:bg-white rounded-none uppercase tracking-widest text-xs h-12"
+                  {/* Wishlist */}
+                  <button
+                    onClick={() => toggleWishlist(prod.id)}
+                    className="absolute top-4 right-4 z-10 w-10 h-10 bg-black/50 backdrop-blur-md border border-border flex items-center justify-center hover:border-accent transition-all duration-300"
+                    data-testid={`button-wishlist-${prod.id}`}
+                    aria-label="Toggle wishlist"
+                  >
+                    <Heart className={`w-4 h-4 transition-colors duration-300 ${wishlist.has(prod.id) ? "text-accent fill-accent" : "text-muted-foreground"}`} />
+                  </button>
+                  {/* Add to Cart slide-up */}
+                  <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
+                    <Button
+                      onClick={() => addToCart(prod)}
+                      className="w-full bg-primary text-primary-foreground hover:bg-white rounded-none uppercase tracking-widest text-[11px] h-11 font-sans"
+                      data-testid={`button-addtocart-${prod.id}`}
                     >
-                      <ShoppingCart className="w-4 h-4 mr-2" /> Add to Cart
+                      <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Add to Cart
                     </Button>
                   </div>
                 </div>
-                <div className="flex justify-between items-start">
-                  <h4 className="font-sans uppercase tracking-widest text-sm text-primary">{prod.name}</h4>
-                  <span className="text-muted-foreground text-sm tracking-wider">{prod.price}</span>
+                <div className="flex justify-between items-center px-1">
+                  <h4 className="font-sans uppercase tracking-widest text-[11px] text-primary">{prod.name}</h4>
+                  <span className="text-muted-foreground text-sm font-sans">${prod.price}</span>
                 </div>
               </motion.div>
             ))}
@@ -241,52 +617,79 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Editorial Showcase */}
-      <section className="py-32 overflow-hidden">
-        <div className="w-full relative h-[70vh] md:h-[90vh] bg-card border-y border-border flex items-center justify-center">
-          <div className="absolute inset-0">
-            <img src="/images/chain-collection.png" alt="Editorial" className="w-full h-full object-cover opacity-30 grayscale" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/50 to-black" />
-          </div>
-          <div className="relative z-10 w-full">
-            <motion.div 
-              initial={{ x: "10%" }}
-              whileInView={{ x: "-10%" }}
-              transition={{ duration: 10, ease: "linear" }}
-              className="whitespace-nowrap"
+      {/* ── Editorial Showcase ────────────────────────────────────────── */}
+      <section className="relative overflow-hidden h-[80vh] md:h-screen flex items-center justify-center">
+        <div className="absolute inset-0">
+          <img src="/images/editorial-hero.png" alt="Editorial" className="w-full h-full object-cover opacity-40" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/60" />
+        </div>
+        <div className="relative z-10 text-center px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+          >
+            <p className="text-[10px] uppercase tracking-[0.5em] text-accent mb-6">New Season</p>
+            <h2 className="text-5xl md:text-8xl lg:text-[9rem] font-display font-light leading-none tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white to-neutral-500 mb-4">
+              MIDNIGHT
+            </h2>
+            <h2 className="text-5xl md:text-8xl lg:text-[9rem] font-display font-light leading-none tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-neutral-400 to-neutral-700 mb-10">
+              COLLECTION
+            </h2>
+            <div className="flex items-center justify-center gap-8 text-xs uppercase tracking-[0.4em] text-muted-foreground mb-12">
+              <span>Limited Series</span>
+              <span className="w-12 h-px bg-border" />
+              <span>Chrome Edition</span>
+            </div>
+            <Button
+              className="bg-transparent border border-primary/60 text-primary hover:bg-primary hover:text-primary-foreground rounded-none uppercase tracking-widest h-14 px-14 transition-all duration-500 text-xs"
+              data-testid="button-editorial-shop"
             >
-              <h2 className="text-[10vw] md:text-[8vw] font-display font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-neutral-800 via-primary to-neutral-800 opacity-80 select-none">
-                MIDNIGHT COLLECTION • LIMITED SERIES • CHROME EDITION
-              </h2>
-            </motion.div>
-          </div>
+              Shop The Edit
+            </Button>
+          </motion.div>
         </div>
       </section>
 
-      {/* Product Experience (3D Hover) */}
-      <section className="py-32 px-6 bg-black">
+      {/* ── Product Experience (3D Tilt) ──────────────────────────────── */}
+      <section id="drops" className="py-32 px-6 bg-black">
         <div className="container mx-auto">
-          <div className="text-center mb-24">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-20"
+          >
+            <p className="text-xs uppercase tracking-[0.4em] text-accent mb-4">Interact</p>
             <h2 className="text-4xl md:text-5xl font-display text-primary mb-4">The Experience</h2>
-            <p className="text-muted-foreground uppercase tracking-widest text-sm max-w-xl mx-auto">Interact with our most exclusive drops. Precision engineered for the bold.</p>
-          </div>
+            <p className="text-muted-foreground uppercase tracking-widest text-[11px] max-w-md mx-auto">Precision engineered for the bold. Tilt to feel the detail.</p>
+          </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 max-w-6xl mx-auto">
-            {[1, 2, 3].map((i) => (
-              <TiltCard key={i} className="aspect-[3/4]">
-                <div className="w-full h-full bg-card border border-border relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10" />
-                  <img 
-                    src={`/images/product-${i}.png`} 
-                    alt={`Experience ${i}`} 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 max-w-5xl mx-auto">
+            {FEATURED_PRODUCTS.map((prod, i) => (
+              <TiltCard key={prod.id} className="aspect-[3/4]">
+                <div className="w-full h-full bg-card border border-border relative overflow-hidden group cursor-pointer">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
+                  <img
+                    src={prod.img}
+                    alt={prod.name}
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                   />
-                  <div className="absolute inset-0 z-20 flex flex-col justify-end p-8" style={{ transform: "translateZ(50px)" }}>
-                    <div className="w-10 h-10 border border-accent rounded-full flex items-center justify-center mb-6 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
-                      <div className="w-2 h-2 bg-accent rounded-full shadow-[0_0_10px_hsl(var(--accent))]" />
+                  <div className="absolute inset-0 z-20 flex flex-col justify-end p-8" style={{ transform: "translateZ(40px)" }}>
+                    <div className="w-8 h-8 border border-accent rounded-full flex items-center justify-center mb-4 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                      <div className="w-2 h-2 bg-accent rounded-full shadow-[0_0_8px_hsl(var(--accent))]" />
                     </div>
-                    <h3 className="font-display text-3xl text-primary mb-2">Exhibit 0{i}</h3>
-                    <p className="text-xs uppercase tracking-widest text-muted-foreground">Examine details</p>
+                    <p className="text-[10px] uppercase tracking-[0.4em] text-accent mb-1">Exhibit 0{i + 1}</p>
+                    <h3 className="font-display text-2xl text-primary mb-3">{prod.name}</h3>
+                    <Button
+                      onClick={() => addToCart(prod)}
+                      className="w-full h-10 rounded-none bg-transparent border border-primary/50 hover:bg-primary hover:text-primary-foreground uppercase tracking-widest text-[10px] transition-all duration-300"
+                      data-testid={`button-tilt-addtocart-${prod.id}`}
+                    >
+                      Add — ${prod.price}
+                    </Button>
                   </div>
                 </div>
               </TiltCard>
@@ -295,31 +698,40 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* ── Testimonials ──────────────────────────────────────────────── */}
       <section className="py-32 bg-neutral-950 border-y border-border overflow-hidden">
-        <div className="container mx-auto px-6 mb-16">
-          <h2 className="text-4xl md:text-5xl font-display text-primary text-center">Inner Circle</h2>
-        </div>
-        
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="container mx-auto px-6 mb-16 text-center"
+        >
+          <p className="text-xs uppercase tracking-[0.4em] text-accent mb-4">Verified Owners</p>
+          <h2 className="text-4xl md:text-5xl font-display text-primary">Inner Circle</h2>
+        </motion.div>
+
         <div className="w-full px-6" ref={emblaRef}>
-          <div className="flex gap-6 -ml-6 cursor-grab active:cursor-grabbing">
+          <div className="flex gap-5 cursor-grab active:cursor-grabbing">
             {[
-              { name: "ALEX M.", text: "The weight, the finish. It feels dangerous. Nothing else comes close to this aesthetic." },
-              { name: "SARAH J.", text: "I've stopped wearing anything else. The Void ring gets comments every single night out." },
-              { name: "D.K.", text: "Packaging was immaculate. The piece itself is heavy, cold, and perfect. True luxury streetwear." },
-              { name: "MARCUS T.", text: "Waited 3 months for the drop. Worth every second. The chrome reflects light unlike any other silver I own." },
-              { name: "ELENA R.", text: "Finally a brand that understands modern edge without looking cheap. Craftsmanship is 10/10." }
+              { name: "ALEX M.", handle: "@alex.m", text: "The weight, the finish — it feels dangerous. Nothing else comes close to this aesthetic." },
+              { name: "SARAH J.", handle: "@sarah.j", text: "I've stopped wearing anything else. The Void ring gets comments every single night out." },
+              { name: "D.K.", handle: "@dk.wears", text: "Packaging was immaculate. The piece itself is heavy, cold, and perfect. True luxury streetwear." },
+              { name: "MARCUS T.", handle: "@marcus.t", text: "Waited 3 months for the drop. Worth every second. The chrome reflects unlike anything I own." },
+              { name: "ELENA R.", handle: "@elena.r", text: "Finally a brand that understands modern edge without looking cheap. Craftsmanship is 10/10." },
+              { name: "JAMES K.", handle: "@jk.fits", text: "The Serpent Ring sold out in 2 mins. Got mine. Feels like wearing something sacred." }
             ].map((review, i) => (
-              <div key={i} className="flex-[0_0_100%] sm:flex-[0_0_50%] lg:flex-[0_0_30%] pl-6">
-                <div className="bg-card border border-border p-8 h-full flex flex-col justify-between">
+              <div key={i} className="flex-[0_0_88%] sm:flex-[0_0_48%] lg:flex-[0_0_30%] min-w-0">
+                <div className="bg-card border border-border p-8 h-full flex flex-col justify-between min-h-[240px]">
                   <div>
-                    <div className="flex items-center gap-1 mb-6 text-primary">
-                      {[1,2,3,4,5].map(s => <Star key={s} className="w-4 h-4 fill-current" />)}
+                    <div className="flex items-center gap-0.5 mb-5 text-primary">
+                      {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-3.5 h-3.5 fill-current" />)}
                     </div>
-                    <p className="text-muted-foreground text-lg mb-8 font-serif italic">"{review.text}"</p>
+                    <p className="text-muted-foreground leading-relaxed mb-6 font-serif italic text-[15px]">"{review.text}"</p>
                   </div>
-                  <div className="text-xs uppercase tracking-widest text-primary border-t border-border pt-4">
-                    {review.name} // Verified
+                  <div className="flex items-center justify-between border-t border-border pt-4">
+                    <span className="text-[10px] uppercase tracking-widest text-primary">{review.name}</span>
+                    <span className="text-[10px] text-accent/70 tracking-wider">{review.handle}</span>
                   </div>
                 </div>
               </div>
@@ -328,81 +740,170 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Instagram Gallery */}
-      <section className="py-32 px-2 md:px-6 bg-black">
+      {/* ── Instagram Gallery ─────────────────────────────────────────── */}
+      <section className="py-32 px-4 md:px-6 bg-black">
         <div className="container mx-auto">
-          <div className="flex items-center justify-between mb-12 px-4">
-            <h2 className="text-2xl font-display tracking-widest uppercase">@Blaze.in</h2>
-            <Button variant="outline" className="rounded-none border-border hover:border-primary uppercase tracking-widest text-xs h-10">
-              Follow Us
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="relative aspect-square group overflow-hidden bg-card">
-                <img src={`/images/product-${i}.png`} alt={`Instagram ${i}`} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-sm">
-                  <Instagram className="w-8 h-8 text-primary" />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="flex items-center justify-between mb-10"
+          >
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.4em] text-accent mb-2">Instagram</p>
+              <h2 className="text-2xl font-display tracking-widest uppercase text-primary">@_.blaze.in._</h2>
+            </div>
+            <a
+              href="https://www.instagram.com/_.blaze.in._"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-[10px] uppercase tracking-widest border border-border hover:border-primary text-muted-foreground hover:text-primary transition-all duration-300 px-5 h-10"
+              data-testid="link-instagram-follow"
+            >
+              <Instagram className="w-3.5 h-3.5" />
+              Follow
+            </a>
+          </motion.div>
+
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={{ visible: { transition: { staggerChildren: 0.07 } } }}
+            className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3"
+          >
+            {INSTAGRAM_IMAGES.map((src, i) => (
+              <motion.a
+                key={i}
+                href="https://www.instagram.com/_.blaze.in._"
+                target="_blank"
+                rel="noopener noreferrer"
+                variants={{
+                  hidden: { opacity: 0, scale: 0.96 },
+                  visible: { opacity: 1, scale: 1, transition: { duration: 0.5 } }
+                }}
+                className="relative aspect-square group overflow-hidden bg-card block"
+                data-testid={`instagram-image-${i}`}
+              >
+                <img src={src} alt={`Blaze.in Instagram ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2">
+                  <Instagram className="w-7 h-7 text-white" />
+                  <span className="text-[9px] uppercase tracking-[0.3em] text-white/80">View on Instagram</span>
                 </div>
-              </div>
+              </motion.a>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* Newsletter */}
-      <section className="py-40 px-6 relative bg-card border-t border-border overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-accent/5 via-transparent to-transparent" />
-        <div className="container mx-auto relative z-10 max-w-2xl text-center">
-          <h2 className="text-5xl md:text-7xl font-display text-primary mb-6">Join the inner circle.</h2>
-          <p className="text-muted-foreground uppercase tracking-widest text-sm mb-12">Exclusive access to limited drops before they go public.</p>
-          
-          <form className="flex flex-col sm:flex-row gap-4" onSubmit={e => e.preventDefault()}>
-            <Input 
-              type="email" 
-              placeholder="YOUR EMAIL" 
-              className="bg-black border-border h-14 rounded-none uppercase tracking-widest text-center sm:text-left px-6 focus-visible:ring-accent"
-            />
-            <Button type="submit" className="h-14 rounded-none bg-accent text-accent-foreground hover:bg-accent/80 hover:shadow-[0_0_15px_hsl(var(--accent)/0.4)] px-10 uppercase tracking-widest transition-all">
-              Subscribe
-            </Button>
-          </form>
+      {/* ── Newsletter ────────────────────────────────────────────────── */}
+      <section id="about" className="py-40 px-6 relative bg-card border-t border-border overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-accent/8 via-transparent to-transparent" />
+        <div className="container mx-auto relative z-10 max-w-xl text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7 }}
+          >
+            <p className="text-[10px] uppercase tracking-[0.5em] text-accent mb-6">Exclusive Access</p>
+            <h2 className="text-5xl md:text-6xl font-display text-primary mb-5 leading-tight">Join the inner circle.</h2>
+            <p className="text-muted-foreground uppercase tracking-widest text-[11px] mb-12 leading-relaxed">
+              First access to limited drops, early previews, and members-only offers.
+            </p>
+
+            <AnimatePresence mode="wait">
+              {newsletterState === "success" ? (
+                <motion.div
+                  key="success"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col items-center gap-4"
+                  data-testid="newsletter-success"
+                >
+                  <div className="w-14 h-14 rounded-full border border-accent/50 flex items-center justify-center bg-accent/10">
+                    <Check className="w-6 h-6 text-accent" />
+                  </div>
+                  <p className="text-primary uppercase tracking-widest text-sm">You're in the circle.</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-widest">Watch your inbox for exclusive access.</p>
+                </motion.div>
+              ) : (
+                <motion.form
+                  key="form"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col sm:flex-row gap-3"
+                  onSubmit={handleNewsletter}
+                  data-testid="newsletter-form"
+                >
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="YOUR EMAIL"
+                    required
+                    className="bg-black border-border/60 h-14 rounded-none uppercase tracking-widest text-center sm:text-left px-6 focus-visible:ring-accent focus-visible:border-accent placeholder:text-muted-foreground/40 text-sm"
+                    data-testid="input-newsletter-email"
+                  />
+                  <Button
+                    type="submit"
+                    className="h-14 rounded-none bg-accent text-accent-foreground hover:bg-accent/80 hover:shadow-[0_0_20px_hsl(var(--accent)/0.5)] px-10 uppercase tracking-widest transition-all text-xs flex-shrink-0"
+                    data-testid="button-newsletter-submit"
+                  >
+                    Subscribe
+                  </Button>
+                </motion.form>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-black py-16 px-6 border-t border-border">
+      {/* ── Footer ────────────────────────────────────────────────────── */}
+      <footer className="bg-black py-20 px-6 border-t border-border">
         <div className="container mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="col-span-1 md:col-span-2">
-              <div className="text-3xl font-display font-semibold tracking-widest text-primary mb-6">BLAZE.IN</div>
-              <p className="text-muted-foreground text-sm max-w-sm">
+              <div className="text-3xl font-display font-semibold tracking-widest text-primary mb-5">BLAZE.IN</div>
+              <p className="text-muted-foreground text-sm max-w-xs leading-relaxed">
                 Underground luxury jewellery for the modern era. Crafted with precision, designed for the bold.
               </p>
+              <a
+                href="https://www.instagram.com/_.blaze.in._"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 mt-6 text-[11px] uppercase tracking-widest text-muted-foreground hover:text-accent transition-colors"
+                data-testid="link-footer-instagram"
+              >
+                <Instagram className="w-4 h-4" />
+                @_.blaze.in._
+              </a>
             </div>
             <div>
-              <h4 className="text-xs uppercase tracking-widest text-primary mb-6">Navigation</h4>
-              <ul className="space-y-4 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-primary transition-colors">Shop All</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Collections</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Limited Drops</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">About Us</a></li>
+              <h4 className="text-[10px] uppercase tracking-widest text-primary mb-6">Shop</h4>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                <li><a href="#" className="hover:text-primary transition-colors">All Pieces</a></li>
+                <li><a href="#collections" className="hover:text-primary transition-colors">Chains</a></li>
+                <li><a href="#collections" className="hover:text-primary transition-colors">Rings</a></li>
+                <li><a href="#drops" className="hover:text-primary transition-colors">Limited Drops</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-xs uppercase tracking-widest text-primary mb-6">Support</h4>
-              <ul className="space-y-4 text-sm text-muted-foreground">
+              <h4 className="text-[10px] uppercase tracking-widest text-primary mb-6">Support</h4>
+              <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
                 <li><a href="#" className="hover:text-primary transition-colors">Shipping & Returns</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Size Guide</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Terms & Privacy</a></li>
               </ul>
             </div>
           </div>
-          
-          <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground uppercase tracking-widest">
-            <p>© {new Date().getFullYear()} BLAZE.IN. ALL RIGHTS RESERVED.</p>
+
+          <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 text-[10px] text-muted-foreground uppercase tracking-widest">
+            <p>© {new Date().getFullYear()} BLAZE.IN. All rights reserved.</p>
             <p>Limited pieces. Unlimited expression.</p>
           </div>
         </div>
