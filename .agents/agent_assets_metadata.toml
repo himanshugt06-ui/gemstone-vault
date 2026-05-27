@@ -1,0 +1,62 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "EmggcTRSw2IBG3Fw--YML"
+uri = "file://artifacts/blaze-in/public/images/chain-collection.png"
+type = "image"
+title = "Chain necklace on dark background"
+
+[[generated]]
+id = "dojiRn5nv_wzkj-N1OWcF"
+uri = "file://artifacts/blaze-in/public/images/ring-collection.png"
+type = "image"
+title = "Rings on dark background"
+
+[[generated]]
+id = "fHe-eyBPQJoMxHbkddzmb"
+uri = "file://artifacts/blaze-in/public/images/earring-collection.png"
+type = "image"
+title = "Earrings on dark background"
+
+[[generated]]
+id = "PqOgoY1pJ7DeEnv_ZSlwb"
+uri = "file://artifacts/blaze-in/public/images/drops-collection.png"
+type = "image"
+title = "Limited drops jewellery"
+
+[[generated]]
+id = "lZq9OtEb8il87Rzk-SN9P"
+uri = "file://artifacts/blaze-in/public/images/product-1.png"
+type = "image"
+title = "Eclipse Chain product"
+
+[[generated]]
+id = "NXBS3mswvq5JhRit8acjc"
+uri = "file://artifacts/blaze-in/public/images/product-2.png"
+type = "image"
+title = "Void Ring product"
+
+[[generated]]
+id = "C92FnfPhmvGmB0b6R5e6H"
+uri = "file://artifacts/blaze-in/public/images/product-3.png"
+type = "image"
+title = "Phantom Cuff product"
+
+[[generated]]
+id = "xSSdKeKnXc1CrPO-s6cc6"
+uri = "file://artifacts/blaze-in/public/images/product-4.png"
+type = "image"
+title = "Neon Pendant product"
+
+[[generated]]
+id = "7HyLVvq_r9ecug3f-v1HG"
+uri = "file://artifacts/blaze-in/public/images/product-5.png"
+type = "image"
+title = "Onyx Studs product"
+
+[[generated]]
+id = "P3f6_qx7FxwCLSogjNNpd"
+uri = "file://artifacts/blaze-in/public/images/product-6.png"
+type = "image"
+title = "Serpent Ring product"

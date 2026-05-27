@@ -1,0 +1,141 @@
+```txt
+Create a premium dark luxury jewellery ecommerce landing page for a brand called “Blaze.in”.
+
+STYLE:
+The website should feel cinematic, editorial, futuristic, and minimal. 
+Use a black and graphite background with chrome silver accents, soft white typography, smooth gradients, glow effects, and luxury fashion aesthetics.
+
+Design inspiration:
+- High-end fashion ecommerce
+- Underground luxury jewellery brands
+- Editorial magazine layouts
+- Modern Gen Z luxury aesthetic
+- Smooth animations and premium transitions
+
+COLOR PALETTE:
+- Black (#000000)
+- Graphite (#111111)
+- Soft white (#f5f5f5)
+- Chrome silver accents
+- Electric blue subtle glow
+
+TYPOGRAPHY:
+Use modern luxury fonts like:
+- Satoshi
+- General Sans
+- Neue Montreal
+- Clash Display
+
+WEBSITE STRUCTURE:
+
+1. HERO SECTION
+- Full-screen cinematic hero
+- Dark luxury jewellery visual/video background
+- Large bold headline:
+  “Crafted for the uncommon.”
+- Small subtitle:
+  “Limited jewellery pieces designed for modern fashion culture.”
+- CTA buttons:
+  - Shop Collection
+  - Explore Drops
+- Smooth scroll animation
+- Floating chrome glow elements
+
+2. FEATURED COLLECTIONS
+Create premium category cards:
+- Chains
+- Rings
+- Earrings
+- Limited Drops
+
+Each card should have:
+- Hover animation
+- Glow effect
+- Minimal product preview
+- Dark glassmorphism background
+
+3. BEST SELLERS SECTION
+Modern ecommerce product grid with:
+- Product image
+- Product name
+- Price
+- Add to Cart button
+- Wishlist icon
+- Hover zoom effect
+- Smooth transitions
+
+4. EDITORIAL SHOWCASE
+Large fashion-editorial banner section.
+Use cinematic imagery with text overlays:
+- “MIDNIGHT COLLECTION”
+- “LIMITED SERIES”
+- “CHROME EDITION”
+
+Large typography with magazine-style layout.
+
+5. PRODUCT EXPERIENCE
+Interactive premium product cards:
+- 3D hover effect
+- Magnetic buttons
+- Image transition on hover
+- Luxury micro interactions
+
+6. TESTIMONIALS
+Minimal dark luxury testimonial cards.
+Clean typography and smooth carousel animation.
+
+7. INSTAGRAM GALLERY
+Integrated social media style grid inspired by the Blaze.in Instagram aesthetic.
+Dark photography and cinematic jewellery visuals.
+
+8. NEWSLETTER SECTION
+Minimal luxury email signup section:
+Headline:
+“Join the inner circle.”
+
+9. FOOTER
+Minimal premium footer with:
+- Shop
+- About
+- Contact
+- Instagram
+- Terms
+- Privacy Policy
+
+FUNCTIONAL REQUIREMENTS:
+- Fully responsive
+- Mobile-first design
+- Smooth scrolling
+- Framer Motion animations
+- Functional ecommerce UI
+- Add to cart functionality
+- Product pricing display
+- Secure checkout flow
+- Payment gateway integration ready
+
+PAYMENT INTEGRATION:
+Support:
+- Razorpay
+- Stripe
+- UPI
+- Debit/Credit Cards
+
+TECH STACK:
+- Next.js
+- Tailwind CSS
+- Framer Motion
+- Razorpay integration
+- Modern responsive layout
+
+DESIGN DETAILS:
+- Large spacing
+- Minimal UI
+- Luxury visual hierarchy
+- Cinematic product lighting
+- Editorial fashion aesthetic
+- Premium hover effects
+- Smooth page transitions
+- Dark immersive experience
+
+The final design should feel like a luxury fashion brand website rather than a generic jewellery store.
+```
