@@ -66,4 +66,30 @@ router.get("/razorpay/key", (_req, res) => {
   res.json({ key_id: key });
 });
 
+router.get("/razorpay/payment/:paymentId", async (req, res) => {
+  const { paymentId } = req.params as { paymentId: string };
+  if (!paymentId || !paymentId.startsWith("pay_")) {
+    res.status(400).json({ error: "Invalid payment ID format. Must start with pay_" });
+    return;
+  }
+  try {
+    const payment = await rzp.payments.fetch(paymentId);
+    res.json({
+      id: payment.id,
+      amount: payment.amount,
+      currency: payment.currency,
+      status: payment.status,
+      method: payment.method,
+      description: payment.description,
+      order_id: payment.order_id,
+      created_at: payment.created_at,
+      email: payment.email,
+      contact: payment.contact,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Razorpay payment fetch failed");
+    res.status(404).json({ error: "Payment not found. Check your payment ID and try again." });
+  }
+});
+
 export default router;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, Heart, ShoppingCart, ArrowDown, Star, Instagram, X, Plus, Minus, Trash2, Check } from "lucide-react";
+import { Search, Heart, ShoppingCart, ArrowDown, Star, Instagram, X, Plus, Minus, Trash2, Check, Package } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
+import { useLocation } from "wouter";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
 import { Button } from "@/components/ui/button";
@@ -486,6 +487,7 @@ function ProductDetailModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Home() {
+  const [, setLocation] = useLocation();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<Set<number>>(new Set());
   const [cartOpen, setCartOpen] = useState(false);
@@ -598,15 +600,27 @@ export default function Home() {
               <p className="text-[10px] uppercase tracking-[0.5em] text-accent mb-4">Payment Confirmed</p>
               <h2 className="text-3xl font-display text-primary mb-3">Order Placed.</h2>
               <p className="text-muted-foreground text-sm mb-2">Thank you for shopping with BLAZE.IN.</p>
-              <p className="text-muted-foreground/50 text-[11px] uppercase tracking-widest mb-10">
-                Payment ID: {paymentSuccess.slice(-12)}
+              <p className="text-muted-foreground/50 text-[11px] uppercase tracking-widest mb-10 font-mono">
+                {paymentSuccess}
               </p>
-              <Button
-                onClick={() => setPaymentSuccess(null)}
-                className="rounded-none bg-primary text-primary-foreground hover:bg-white uppercase tracking-widest text-xs h-12 px-10"
-              >
-                Continue Shopping
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button
+                  onClick={() => {
+                    setLocation(`/track?pid=${paymentSuccess}`);
+                    setPaymentSuccess(null);
+                  }}
+                  className="rounded-none border border-accent bg-accent/10 text-accent hover:bg-accent hover:text-black uppercase tracking-widest text-xs h-12 px-8 gap-2"
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  Track Order
+                </Button>
+                <Button
+                  onClick={() => setPaymentSuccess(null)}
+                  className="rounded-none bg-primary text-primary-foreground hover:bg-white uppercase tracking-widest text-xs h-12 px-8"
+                >
+                  Continue Shopping
+                </Button>
+              </div>
             </motion.div>
           </>
         )}
