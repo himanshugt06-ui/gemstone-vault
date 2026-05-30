@@ -5,6 +5,7 @@ import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RazorpayCheckout } from "@/components/RazorpayCheckout";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Product {
@@ -85,12 +86,14 @@ function CartDrawer({
   items,
   onQtyChange,
   onRemove,
+  onPaymentSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   items: CartItem[];
   onQtyChange: (id: number, delta: number) => void;
   onRemove: (id: number) => void;
+  onPaymentSuccess: (paymentId: string) => void;
 }) {
   const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
 
@@ -188,13 +191,12 @@ function CartDrawer({
                   <span className="text-xs uppercase tracking-widest text-muted-foreground">Subtotal</span>
                   <span className="text-xl font-display text-primary">{inr(subtotal)}</span>
                 </div>
-                <p className="text-[11px] text-muted-foreground/60 uppercase tracking-widest">Shipping & taxes calculated at checkout</p>
-                <Button
-                  className="w-full h-14 rounded-none bg-primary text-primary-foreground hover:bg-white uppercase tracking-widest text-xs font-sans"
-                  data-testid="checkout-button"
-                >
-                  Proceed to Checkout
-                </Button>
+                <p className="text-[11px] text-muted-foreground/60 uppercase tracking-widest">Free shipping · COD available · Secure checkout</p>
+                <RazorpayCheckout
+                  items={items}
+                  onSuccess={onPaymentSuccess}
+                  label="Pay with Razorpay"
+                />
                 <Button
                   variant="ghost"
                   onClick={onClose}
@@ -489,6 +491,7 @@ export default function Home() {
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [newsletterState, setNewsletterState] = useState<"idle" | "success">("idle");
   const [email, setEmail] = useState("");
@@ -563,7 +566,51 @@ export default function Home() {
         items={cartItems}
         onQtyChange={changeQty}
         onRemove={removeFromCart}
+        onPaymentSuccess={(pid) => {
+          setPaymentSuccess(pid);
+          setCartItems([]);
+          setCartOpen(false);
+        }}
       />
+
+      {/* Payment Success Overlay */}
+      <AnimatePresence>
+        {paymentSuccess && (
+          <>
+            <motion.div
+              key="pay-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-md z-[90]"
+            />
+            <motion.div
+              key="pay-modal"
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", stiffness: 280, damping: 28 }}
+              className="fixed inset-x-4 top-1/2 -translate-y-1/2 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-md bg-[#0a0a0a] border border-border z-[100] p-12 text-center"
+            >
+              <div className="w-16 h-16 rounded-full border border-accent/50 bg-accent/10 flex items-center justify-center mx-auto mb-8">
+                <Check className="w-7 h-7 text-accent" />
+              </div>
+              <p className="text-[10px] uppercase tracking-[0.5em] text-accent mb-4">Payment Confirmed</p>
+              <h2 className="text-3xl font-display text-primary mb-3">Order Placed.</h2>
+              <p className="text-muted-foreground text-sm mb-2">Thank you for shopping with BLAZE.IN.</p>
+              <p className="text-muted-foreground/50 text-[11px] uppercase tracking-widest mb-10">
+                Payment ID: {paymentSuccess.slice(-12)}
+              </p>
+              <Button
+                onClick={() => setPaymentSuccess(null)}
+                className="rounded-none bg-primary text-primary-foreground hover:bg-white uppercase tracking-widest text-xs h-12 px-10"
+              >
+                Continue Shopping
+              </Button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ── Navbar ───────────────────────────────────────────────────── */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled ? "bg-black/85 backdrop-blur-md border-b border-border py-4" : "bg-transparent py-6"}`}>
