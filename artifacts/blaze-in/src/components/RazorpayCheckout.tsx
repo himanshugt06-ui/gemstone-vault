@@ -63,6 +63,7 @@ export function RazorpayCheckout({ items, onSuccess, className = "", label = "Pr
   const [errorMsg, setErrorMsg] = useState("");
 
   const totalPaise = items.reduce((s, i) => s + i.price * i.qty, 0) * 100;
+  const totalInr = items.reduce((s, i) => s + i.price * i.qty, 0);
 
   const handleCheckout = useCallback(async () => {
     if (items.length === 0) return;
@@ -81,11 +82,7 @@ export function RazorpayCheckout({ items, onSuccess, className = "", label = "Pr
         fetch(`${BASE}/api/razorpay/order`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: totalPaise,
-            currency: "INR",
-            receipt: `order_${Date.now()}`,
-          }),
+          body: JSON.stringify({ amount: totalPaise, currency: "INR", receipt: `order_${Date.now()}` }),
         }),
         fetch(`${BASE}/api/razorpay/key`),
       ]);
@@ -109,6 +106,7 @@ export function RazorpayCheckout({ items, onSuccess, className = "", label = "Pr
             const verifyRes = await fetch(`${BASE}/api/razorpay/verify`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
+              credentials: "include",
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -117,6 +115,19 @@ export function RazorpayCheckout({ items, onSuccess, className = "", label = "Pr
             });
             const verifyData = await verifyRes.json() as { success: boolean };
             if (verifyData.success) {
+              // Save order to DB
+              await fetch(`${BASE}/api/orders`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  totalAmount: totalInr,
+                  items: items.map(i => ({ productId: i.id, name: i.name, price: i.price, qty: i.qty })),
+                }),
+              }).catch(() => {});
+
               setState("success");
               onSuccess(response.razorpay_payment_id);
             } else {
@@ -143,7 +154,7 @@ export function RazorpayCheckout({ items, onSuccess, className = "", label = "Pr
       setState("error");
       setErrorMsg(err instanceof Error ? err.message : "Payment failed. Try again.");
     }
-  }, [items, totalPaise, onSuccess, state]);
+  }, [items, totalPaise, totalInr, onSuccess, state]);
 
   if (state === "success") {
     return (

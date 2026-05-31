@@ -1,0 +1,2 @@
+- [Replit-auth-web tsconfig](replit-auth-web-tsconfig.md) — lib needs composite:true + declaration fields to be used as project reference from artifact packages
+- [AuthUser type](authuser-type.md) — AuthUser from api-zod has no isAdmin; admin gating must be done server-side or via email/username check

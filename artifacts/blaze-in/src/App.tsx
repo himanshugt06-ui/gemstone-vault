@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import OrderTracking from "@/pages/order-tracking";
+import AdminPage from "@/pages/admin";
 
 const queryClient = new QueryClient();
 
@@ -14,6 +15,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/track" component={OrderTracking} />
+      <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -22,6 +24,8 @@ function Router() {
 function App() {
   useEffect(() => {
     document.documentElement.classList.add('dark');
+    // Expose BASE_URL for replit-auth-web login redirect
+    (window as Window & { __BASE_URL__?: string }).__BASE_URL__ = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
   }, []);
 
   return (

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, Heart, ShoppingCart, ArrowDown, Star, Instagram, X, Plus, Minus, Trash2, Check, Package } from "lucide-react";
+import { Search, Heart, ShoppingCart, ArrowDown, Star, Instagram, X, Plus, Minus, Trash2, Check, Package, LogIn, LogOut, User, Shield } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { useLocation } from "wouter";
 import useEmblaCarousel from "embla-carousel-react";
@@ -7,36 +7,40 @@ import Autoplay from "embla-carousel-autoplay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RazorpayCheckout } from "@/components/RazorpayCheckout";
+import { useAuth } from "@workspace/replit-auth-web";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Product {
   id: number;
   name: string;
+  description: string;
   price: number;
-  img: string;
+  imageUrl: string;
+  category: string;
+  inStock: string;
 }
 
-interface CartItem extends Product {
+interface CartItem {
+  id: number;
+  name: string;
+  price: number;
+  img: string;
   qty: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
-// ─── Product Data ─────────────────────────────────────────────────────────────
-const PRODUCTS: Product[] = [
-  { id: 1, name: "Eclipse Chain", price: 999, img: "/images/product-1.png" },
-  { id: 2, name: "Void Ring", price: 699, img: "/images/product-2.png" },
-  { id: 3, name: "Phantom Cuff", price: 949, img: "/images/product-3.png" },
-  { id: 4, name: "Neon Pendant", price: 799, img: "/images/product-4.png" },
-  { id: 5, name: "Onyx Studs", price: 499, img: "/images/product-5.png" },
-  { id: 6, name: "Serpent Ring", price: 849, img: "/images/product-6.png" },
-];
-
-const FEATURED_PRODUCTS: Product[] = [
-  { id: 1, name: "Eclipse Chain", price: 999, img: "/images/product-1.png" },
-  { id: 2, name: "Void Ring", price: 699, img: "/images/product-2.png" },
-  { id: 3, name: "Phantom Cuff", price: 949, img: "/images/product-3.png" },
+const CATEGORIES = [
+  { key: "all", label: "All" },
+  { key: "chain", label: "Chains" },
+  { key: "ring", label: "Rings" },
+  { key: "earring", label: "Earrings" },
+  { key: "cuff", label: "Cuffs" },
+  { key: "pendant", label: "Pendants" },
+  { key: "stud", label: "Studs" },
 ];
 
 const INSTAGRAM_IMAGES = [
@@ -236,8 +240,9 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  const allProducts: Product[] = (window as Window & { __PRODUCTS__?: Product[] }).__PRODUCTS__ ?? [];
   const filtered = query.length > 1
-    ? PRODUCTS.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
+    ? allProducts.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
     : [];
 
   return (
@@ -280,7 +285,7 @@ function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }
                     className="flex items-center gap-4 p-4 border border-border hover:border-primary/50 transition-colors cursor-pointer group"
                     data-testid={`search-result-${p.id}`}
                   >
-                    <img src={p.img} alt={p.name} className="w-12 h-12 object-cover bg-card" />
+                    <img src={p.imageUrl} alt={p.name} className="w-12 h-12 object-cover bg-card" />
                     <div className="flex-1">
                       <p className="text-sm uppercase tracking-widest text-primary group-hover:text-white transition-colors">{p.name}</p>
                     </div>
@@ -374,7 +379,7 @@ function ProductDetailModal({
             <div className="grid grid-cols-1 md:grid-cols-2">
               {/* Image panel */}
               <div className="relative aspect-square bg-card overflow-hidden">
-                <img src={product.img} alt={product.name} className="w-full h-full object-cover" />
+                <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
                 <div className="absolute top-4 left-4 px-3 py-1 border border-accent/40 bg-accent/10">
                   <span className="text-[9px] uppercase tracking-[0.3em] text-accent">Limited Piece</span>
@@ -488,6 +493,9 @@ function ProductDetailModal({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Home() {
   const [, setLocation] = useLocation();
+  const { user, isAuthenticated, login, logout } = useAuth();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [activeCategory, setActiveCategory] = useState("all");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<Set<number>>(new Set());
   const [cartOpen, setCartOpen] = useState(false);
@@ -510,11 +518,22 @@ export default function Home() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    fetch(`${BASE}/api/products`)
+      .then(r => r.json())
+      .then((data: Product[]) => {
+        setProducts(data);
+        // Expose for SearchOverlay
+        (window as Window & { __PRODUCTS__?: Product[] }).__PRODUCTS__ = data;
+      })
+      .catch(() => {});
+  }, []);
+
   const addToCart = useCallback((product: Product) => {
     setCartItems(prev => {
       const existing = prev.find(i => i.id === product.id);
       if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...product, qty: 1 }];
+      return [...prev, { id: product.id, name: product.name, price: product.price, img: product.imageUrl, qty: 1 }];
     });
     setCartOpen(true);
   }, []);
@@ -636,7 +655,7 @@ export default function Home() {
             <a href="#drops" className="hover:text-primary transition-colors text-accent">Drops</a>
             <a href="#about" className="hover:text-primary transition-colors">About</a>
           </div>
-          <div className="flex items-center space-x-5 text-muted-foreground">
+          <div className="flex items-center space-x-4 text-muted-foreground">
             <button
               onClick={() => setSearchOpen(true)}
               className="hover:text-primary transition-colors"
@@ -677,6 +696,38 @@ export default function Home() {
                 </AnimatePresence>
               )}
             </button>
+            {/* Auth */}
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setLocation("/admin")}
+                  className="hidden md:flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-accent hover:text-white transition-colors border border-accent/30 hover:border-accent px-3 py-1.5"
+                  title="Admin Panel"
+                >
+                  <Shield className="w-3 h-3" /> Admin
+                </button>
+                <button
+                  onClick={() => logout()}
+                  className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest hover:text-primary transition-colors"
+                  title="Sign out"
+                >
+                  <div className="w-7 h-7 rounded-full border border-border flex items-center justify-center bg-card text-primary overflow-hidden">
+                    {user?.profileImageUrl
+                      ? <img src={user.profileImageUrl} alt="avatar" className="w-full h-full object-cover" />
+                      : <User className="w-3.5 h-3.5" />}
+                  </div>
+                  <span className="hidden md:inline"><LogOut className="w-3.5 h-3.5" /></span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => login()}
+                className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest hover:text-primary transition-colors border border-border hover:border-primary px-3 py-1.5"
+                data-testid="button-login"
+              >
+                <LogIn className="w-3.5 h-3.5" /> Sign In
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -812,7 +863,7 @@ export default function Home() {
       {/* ── Best Sellers ──────────────────────────────────────────────── */}
       <section id="bestsellers" className="py-32 px-6 bg-neutral-950 border-y border-border">
         <div className="container mx-auto">
-          <div className="flex items-end justify-between mb-16">
+          <div className="flex items-end justify-between mb-10">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -825,8 +876,25 @@ export default function Home() {
             <a href="#" className="hidden md:block uppercase tracking-widest text-xs text-primary hover:text-accent transition-colors border-b border-primary/50 hover:border-accent pb-1">View All</a>
           </div>
 
+          {/* Category Filter */}
+          <div className="flex flex-wrap gap-2 mb-12">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.key}
+                onClick={() => setActiveCategory(cat.key)}
+                className={`px-5 py-2 text-[10px] uppercase tracking-widest border transition-all duration-200 ${
+                  activeCategory === cat.key
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {PRODUCTS.map((prod, i) => (
+            {(activeCategory === "all" ? products : products.filter(p => p.category === activeCategory)).map((prod, i) => (
               <motion.div
                 key={prod.id}
                 initial={{ opacity: 0, y: 30 }}
@@ -842,10 +910,14 @@ export default function Home() {
                   data-testid={`button-open-pdp-${prod.id}`}
                 >
                   <img
-                    src={prod.img}
+                    src={prod.imageUrl}
                     alt={prod.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
+                  {/* Category badge */}
+                  <div className="absolute top-4 left-4 z-10">
+                    <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground/80 bg-black/50 backdrop-blur-sm px-2 py-0.5 border border-border/50">{prod.category}</span>
+                  </div>
                   {/* View detail hint */}
                   <div className="absolute top-4 left-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <span className="text-[9px] uppercase tracking-[0.3em] text-white/70 bg-black/50 backdrop-blur-sm px-2 py-1">View Details</span>
@@ -859,16 +931,24 @@ export default function Home() {
                   >
                     <Heart className={`w-4 h-4 transition-colors duration-300 ${wishlist.has(prod.id) ? "text-accent fill-accent" : "text-muted-foreground"}`} />
                   </button>
+                  {/* Out of stock overlay */}
+                  {prod.inStock === "false" && (
+                    <div className="absolute inset-0 bg-black/60 z-20 flex items-center justify-center">
+                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-border px-4 py-2 bg-black/80">Sold Out</span>
+                    </div>
+                  )}
                   {/* Add to Cart slide-up */}
-                  <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
-                    <Button
-                      onClick={(e) => { e.stopPropagation(); addToCart(prod); }}
-                      className="w-full bg-primary text-primary-foreground hover:bg-white rounded-none uppercase tracking-widest text-[11px] h-11 font-sans"
-                      data-testid={`button-addtocart-${prod.id}`}
-                    >
-                      <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Add to Cart
-                    </Button>
-                  </div>
+                  {prod.inStock !== "false" && (
+                    <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
+                      <Button
+                        onClick={(e) => { e.stopPropagation(); addToCart(prod); }}
+                        className="w-full bg-primary text-primary-foreground hover:bg-white rounded-none uppercase tracking-widest text-[11px] h-11 font-sans"
+                        data-testid={`button-addtocart-${prod.id}`}
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Add to Cart
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex justify-between items-center px-1">
                   <h4 className="font-sans uppercase tracking-widest text-[11px] text-primary">{prod.name}</h4>
@@ -931,12 +1011,12 @@ export default function Home() {
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 max-w-5xl mx-auto">
-            {FEATURED_PRODUCTS.map((prod, i) => (
+            {products.slice(0, 3).map((prod, i) => (
               <TiltCard key={prod.id} className="aspect-[3/4]">
                 <div className="w-full h-full bg-card border border-border relative overflow-hidden group cursor-pointer">
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
                   <img
-                    src={prod.img}
+                    src={prod.imageUrl}
                     alt={prod.name}
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                   />
@@ -1161,6 +1241,11 @@ export default function Home() {
                 <li><a href="#" className="hover:text-primary transition-colors">Shipping & Returns</a></li>
                 <li><a href="#" className="hover:text-primary transition-colors">Size Guide</a></li>
                 <li><a href="#" className="hover:text-primary transition-colors">Terms & Privacy</a></li>
+                <li>
+                  <button onClick={() => setLocation("/track")} className="hover:text-primary transition-colors text-left">
+                    Track My Order
+                  </button>
+                </li>
               </ul>
             </div>
           </div>
