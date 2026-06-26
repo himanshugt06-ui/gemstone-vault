@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RazorpayCheckout } from "@/components/RazorpayCheckout";
 import { useAuth } from "@workspace/replit-auth-web";
+import { AuthModal } from "@/components/AuthModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -493,7 +494,8 @@ function ProductDetailModal({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Home() {
   const [, setLocation] = useLocation();
-  const { user, isAuthenticated, login, logout } = useAuth();
+  const { user, isAuthenticated, logout, refetch } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [activeCategory, setActiveCategory] = useState("all");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -699,13 +701,18 @@ export default function Home() {
             {/* Auth */}
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setLocation("/admin")}
-                  className="hidden md:flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-accent hover:text-white transition-colors border border-accent/30 hover:border-accent px-3 py-1.5"
-                  title="Admin Panel"
-                >
-                  <Shield className="w-3 h-3" /> Admin
-                </button>
+                {user?.isAdmin && (
+                  <button
+                    onClick={() => setLocation("/admin")}
+                    className="hidden md:flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-accent hover:text-white transition-colors border border-accent/30 hover:border-accent px-3 py-1.5"
+                    title="Admin Panel"
+                  >
+                    <Shield className="w-3 h-3" /> Admin
+                  </button>
+                )}
+                <span className="hidden md:block text-[10px] uppercase tracking-widest text-muted-foreground max-w-[120px] truncate">
+                  {user?.firstName || user?.email?.split("@")[0]}
+                </span>
                 <button
                   onClick={() => logout()}
                   className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest hover:text-primary transition-colors"
@@ -721,12 +728,18 @@ export default function Home() {
               </div>
             ) : (
               <button
-                onClick={() => login()}
+                onClick={() => setShowAuthModal(true)}
                 className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest hover:text-primary transition-colors border border-border hover:border-primary px-3 py-1.5"
                 data-testid="button-login"
               >
                 <LogIn className="w-3.5 h-3.5" /> Sign In
               </button>
+            )}
+            {showAuthModal && (
+              <AuthModal
+                onClose={() => setShowAuthModal(false)}
+                onSuccess={() => { setShowAuthModal(false); refetch(); }}
+              />
             )}
           </div>
         </div>

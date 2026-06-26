@@ -10,6 +10,8 @@ import type { OrderSavedItemsItem } from './orderSavedItemsItem';
 export interface OrderSaved {
   id: number;
   razorpayPaymentId?: string;
+  email?: string;
+  contact?: string;
   totalAmount?: number;
   status?: string;
   createdAt?: string;

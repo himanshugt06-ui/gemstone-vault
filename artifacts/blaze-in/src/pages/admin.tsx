@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Plus, Pencil, Trash2, ArrowLeft, Save, X, Package, ShoppingBag, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowLeft, Save, X, Package, ShoppingBag, Loader2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -35,11 +35,11 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const isAdmin = !!user;
+  const isAdmin = user?.isAdmin === true;
 
   useEffect(() => {
     if (!isLoading && !user) {
-      window.location.href = `/api/login?returnTo=${encodeURIComponent(BASE + "/admin")}`;
+      setLocation("/");
     }
   }, [isLoading, user]);
 
@@ -63,6 +63,18 @@ export default function AdminPage() {
       const res = await fetch(`${BASE}/api/orders`, { credentials: "include" });
       const data = await res.json();
       if (Array.isArray(data)) setOrders(data);
+    } catch {}
+  }
+
+  async function shipOrder(id: number) {
+    try {
+      const res = await fetch(`${BASE}/api/orders/${id}/ship`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "shipped" } : o)));
+      }
     } catch {}
   }
 
@@ -119,6 +131,20 @@ export default function AdminPage() {
   }
 
   if (!user) return null;
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 font-sans">
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Not authorized</p>
+        <button
+          onClick={() => setLocation("/")}
+          className="text-[10px] uppercase tracking-widest text-accent hover:text-white transition-colors"
+        >
+          ← Go Home
+        </button>
+      </div>
+    );
+  }
 
   const inr = (p: number) => `₹${(p).toLocaleString("en-IN")}`;
 
@@ -281,10 +307,26 @@ export default function AdminPage() {
                           {new Date(o.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
-                      <div className="flex-shrink-0">
-                        <span className={`text-[10px] uppercase tracking-widest px-3 py-1 border ${o.status === "paid" ? "border-emerald-400/30 text-emerald-400 bg-emerald-400/10" : "border-border text-muted-foreground"}`}>
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        <span className={`text-[10px] uppercase tracking-widest px-3 py-1 border ${
+                          o.status === "shipped"
+                            ? "border-blue-400/30 text-blue-400 bg-blue-400/10"
+                            : o.status === "paid"
+                            ? "border-emerald-400/30 text-emerald-400 bg-emerald-400/10"
+                            : "border-border text-muted-foreground"
+                        }`}>
                           {o.status}
                         </span>
+                        {o.status !== "shipped" && (
+                          <Button
+                            onClick={() => shipOrder(o.id)}
+                            variant="ghost"
+                            className="h-7 px-2 rounded-none hover:bg-blue-400/10 hover:text-blue-400 text-[10px] uppercase tracking-widest gap-1"
+                            title="Mark as Shipped"
+                          >
+                            <Truck className="w-3 h-3" /> Ship
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {Array.isArray(o.items) && o.items.length > 0 && (

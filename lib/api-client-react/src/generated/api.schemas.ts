@@ -19,27 +19,24 @@ export interface AuthUser {
   lastName: string | null;
   /** @nullable */
   profileImageUrl: string | null;
+  isAdmin?: boolean;
 }
 
 export interface AuthUserEnvelope {
   user: AuthUser | null;
 }
 
-export interface MobileTokenExchangeRequest {
-  /** @minLength 1 */
-  code: string;
-  /** @minLength 1 */
-  code_verifier: string;
-  /** @minLength 1 */
-  redirect_uri: string;
-  /** @minLength 1 */
-  state: string;
-  /** @minLength 1 */
-  nonce?: string;
+export interface SignupRequest {
+  email: string;
+  /** @minLength 6 */
+  password: string;
+  firstName?: string;
+  lastName?: string;
 }
 
-export interface MobileTokenExchangeSuccess {
-  token: string;
+export interface LoginRequest {
+  email: string;
+  password: string;
 }
 
 export const LogoutSuccessValue = {
@@ -91,6 +88,8 @@ export type OrderSavedItemsItem = { [key: string]: unknown };
 export interface OrderSaved {
   id: number;
   razorpayPaymentId?: string;
+  email?: string;
+  contact?: string;
   totalAmount?: number;
   status?: string;
   createdAt?: string;
@@ -101,16 +100,6 @@ export interface OrderSaved {
  * Opaque session token — Bearer <sid>.
  */
 export type AuthorizationSessionHeaderParameter = string;
-
-export type BeginBrowserLoginParams = {
-returnTo?: string;
-};
-
-export type HandleBrowserLoginCallbackParams = {
-code?: string;
-state?: string;
-iss?: string;
-};
 
 export type ListProductsParams = {
 category?: string;

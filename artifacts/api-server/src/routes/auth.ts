@@ -1,272 +1,351 @@
-import * as oidc from "openid-client";
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { Router, type IRouter, type Request, type Response } from "express";
-import {
-  GetCurrentAuthUserResponse,
-  ExchangeMobileAuthorizationCodeBody,
-  ExchangeMobileAuthorizationCodeResponse,
-  LogoutMobileSessionResponse,
-} from "@workspace/api-zod";
 import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
   clearSession,
-  getOidcConfig,
   getSessionId,
   createSession,
   deleteSession,
   SESSION_COOKIE,
   SESSION_TTL,
-  ISSUER_URL,
   type SessionData,
 } from "../lib/auth";
 
-const OIDC_COOKIE_TTL = 10 * 60 * 1000;
-
 const router: IRouter = Router();
 
+const OAUTH_COOKIE_TTL = 10 * 60 * 1000;
+
 function getOrigin(req: Request): string {
-  const proto = req.headers["x-forwarded-proto"] || "https";
+  const proto = req.headers["x-forwarded-proto"] ?? "https";
   const host =
-    req.headers["x-forwarded-host"] || req.headers["host"] || "localhost";
+    req.headers["x-forwarded-host"] ?? req.headers["host"] ?? "localhost";
   return `${proto}://${host}`;
 }
 
 function setSessionCookie(res: Response, sid: string) {
   res.cookie(SESSION_COOKIE, sid, {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL,
   });
 }
 
-function setOidcCookie(res: Response, name: string, value: string) {
-  res.cookie(name, value, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: OIDC_COOKIE_TTL,
-  });
+function adminEmail(): string {
+  return (process.env.ADMIN_EMAIL ?? "").toLowerCase();
 }
 
-function getSafeReturnTo(value: unknown): string {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/";
-  }
-  return value;
+function isAdminEmail(email: string | null | undefined): boolean {
+  return !!adminEmail() && !!email && email.toLowerCase() === adminEmail();
 }
 
-async function upsertUser(claims: Record<string, unknown>) {
-  const userData = {
-    id: claims.sub as string,
-    email: (claims.email as string) || null,
-    firstName: (claims.first_name as string) || null,
-    lastName: (claims.last_name as string) || null,
-    profileImageUrl: (claims.profile_image_url || claims.picture) as
-      | string
-      | null,
+function buildAuthUser(dbUser: {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+}) {
+  return {
+    id: dbUser.id,
+    email: dbUser.email,
+    firstName: dbUser.firstName,
+    lastName: dbUser.lastName,
+    profileImageUrl: dbUser.profileImageUrl,
+    isAdmin: isAdminEmail(dbUser.email),
   };
-
-  const [user] = await db
-    .insert(usersTable)
-    .values(userData)
-    .onConflictDoUpdate({
-      target: usersTable.id,
-      set: {
-        ...userData,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-  return user;
 }
 
+// ── GET /auth/user ────────────────────────────────────────────────────────────
 router.get("/auth/user", (req: Request, res: Response) => {
-  res.json(
-    GetCurrentAuthUserResponse.parse({
-      user: req.isAuthenticated() ? req.user : null,
-    }),
-  );
-});
-
-router.get("/login", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const callbackUrl = `${getOrigin(req)}/api/callback`;
-
-  const returnTo = getSafeReturnTo(req.query.returnTo);
-
-  const state = oidc.randomState();
-  const nonce = oidc.randomNonce();
-  const codeVerifier = oidc.randomPKCECodeVerifier();
-  const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
-
-  const redirectTo = oidc.buildAuthorizationUrl(config, {
-    redirect_uri: callbackUrl,
-    scope: "openid email profile offline_access",
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    prompt: "login consent",
-    state,
-    nonce,
-  });
-
-  setOidcCookie(res, "code_verifier", codeVerifier);
-  setOidcCookie(res, "nonce", nonce);
-  setOidcCookie(res, "state", state);
-  setOidcCookie(res, "return_to", returnTo);
-
-  res.redirect(redirectTo.href);
-});
-
-// Query params are not validated because the OIDC provider may include
-// parameters not expressed in the schema.
-router.get("/callback", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const callbackUrl = `${getOrigin(req)}/api/callback`;
-
-  const codeVerifier = req.cookies?.code_verifier;
-  const nonce = req.cookies?.nonce;
-  const expectedState = req.cookies?.state;
-
-  if (!codeVerifier || !expectedState) {
-    res.redirect("/api/login");
+  if (!req.isAuthenticated()) {
+    res.json({ user: null });
     return;
   }
-
-  const currentUrl = new URL(
-    `${callbackUrl}?${new URL(req.url, `http://${req.headers.host}`).searchParams}`,
-  );
-
-  let tokens: oidc.TokenEndpointResponse & oidc.TokenEndpointResponseHelpers;
-  try {
-    tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
-      pkceCodeVerifier: codeVerifier,
-      expectedNonce: nonce,
-      expectedState,
-      idTokenExpected: true,
-    });
-  } catch {
-    res.redirect("/api/login");
-    return;
-  }
-
-  const returnTo = getSafeReturnTo(req.cookies?.return_to);
-
-  res.clearCookie("code_verifier", { path: "/" });
-  res.clearCookie("nonce", { path: "/" });
-  res.clearCookie("state", { path: "/" });
-  res.clearCookie("return_to", { path: "/" });
-
-  const claims = tokens.claims();
-  if (!claims) {
-    res.redirect("/api/login");
-    return;
-  }
-
-  const dbUser = await upsertUser(
-    claims as unknown as Record<string, unknown>,
-  );
-
-  const now = Math.floor(Date.now() / 1000);
-  const sessionData: SessionData = {
+  res.json({
     user: {
-      id: dbUser.id,
-      email: dbUser.email,
-      firstName: dbUser.firstName,
-      lastName: dbUser.lastName,
-      profileImageUrl: dbUser.profileImageUrl,
+      ...req.user,
+      isAdmin: isAdminEmail(req.user.email),
     },
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
+  });
+});
+
+// ── POST /auth/signup ─────────────────────────────────────────────────────────
+router.post("/auth/signup", async (req: Request, res: Response) => {
+  const { email, password, firstName, lastName } = req.body as {
+    email?: string;
+    password?: string;
+    firstName?: string;
+    lastName?: string;
   };
 
-  const sid = await createSession(sessionData);
-  setSessionCookie(res, sid);
-  res.redirect(returnTo);
-});
+  if (!email || !password) {
+    res.status(400).json({ error: "Email and password are required." });
+    return;
+  }
+  if (password.length < 6) {
+    res.status(400).json({ error: "Password must be at least 6 characters." });
+    return;
+  }
 
-router.get("/logout", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const origin = getOrigin(req);
+  try {
+    const [existing] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, email.toLowerCase()));
 
-  const sid = getSessionId(req);
-  await clearSession(res, sid);
-
-  const endSessionUrl = oidc.buildEndSessionUrl(config, {
-    client_id: process.env.REPL_ID!,
-    post_logout_redirect_uri: origin,
-  });
-
-  res.redirect(endSessionUrl.href);
-});
-
-router.post(
-  "/mobile-auth/token-exchange",
-  async (req: Request, res: Response) => {
-    const parsed = ExchangeMobileAuthorizationCodeBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "Missing or invalid required parameters" });
+    if (existing) {
+      res
+        .status(409)
+        .json({ error: "An account with this email already exists." });
       return;
     }
 
-    const { code, code_verifier, redirect_uri, state, nonce } = parsed.data;
+    const passwordHash = await bcrypt.hash(password, 12);
+    const [dbUser] = await db
+      .insert(usersTable)
+      .values({
+        email: email.toLowerCase(),
+        firstName: firstName ?? null,
+        lastName: lastName ?? null,
+        passwordHash,
+      })
+      .returning();
 
-    try {
-      const config = await getOidcConfig();
+    const authUser = buildAuthUser(dbUser);
+    const sid = await createSession({ user: authUser } as SessionData);
+    setSessionCookie(res, sid);
+    res.status(201).json({ user: authUser });
+  } catch (err) {
+    req.log.error({ err }, "Signup error");
+    res.status(500).json({ error: "Signup failed. Please try again." });
+  }
+});
 
-      const callbackUrl = new URL(redirect_uri);
-      callbackUrl.searchParams.set("code", code);
-      callbackUrl.searchParams.set("state", state);
-      callbackUrl.searchParams.set("iss", ISSUER_URL);
+// ── POST /auth/login ──────────────────────────────────────────────────────────
+router.post("/auth/login", async (req: Request, res: Response) => {
+  const { email, password } = req.body as {
+    email?: string;
+    password?: string;
+  };
 
-      const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
-        pkceCodeVerifier: code_verifier,
-        expectedNonce: nonce ?? undefined,
-        expectedState: state,
-        idTokenExpected: true,
-      });
+  if (!email || !password) {
+    res.status(400).json({ error: "Email and password are required." });
+    return;
+  }
 
-      const claims = tokens.claims();
-      if (!claims) {
-        res.status(401).json({ error: "No claims in ID token" });
-        return;
-      }
+  try {
+    const [dbUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email.toLowerCase()));
 
-      const dbUser = await upsertUser(
-        claims as unknown as Record<string, unknown>,
-      );
-
-      const now = Math.floor(Date.now() / 1000);
-      const sessionData: SessionData = {
-        user: {
-          id: dbUser.id,
-          email: dbUser.email,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          profileImageUrl: dbUser.profileImageUrl,
-        },
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
-      };
-
-      const sid = await createSession(sessionData);
-      res.json(ExchangeMobileAuthorizationCodeResponse.parse({ token: sid }));
-    } catch (err) {
-      req.log.error({ err }, "Mobile token exchange error");
-      res.status(500).json({ error: "Token exchange failed" });
+    if (!dbUser) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
     }
-  },
-);
 
+    if (!dbUser.passwordHash) {
+      res.status(401).json({
+        error: "This account uses Google Sign-In. Please use that instead.",
+      });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, dbUser.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+
+    const authUser = buildAuthUser(dbUser);
+    const sid = await createSession({ user: authUser } as SessionData);
+    setSessionCookie(res, sid);
+    res.json({ user: authUser });
+  } catch (err) {
+    req.log.error({ err }, "Login error");
+    res.status(500).json({ error: "Login failed. Please try again." });
+  }
+});
+
+// ── POST /auth/logout ─────────────────────────────────────────────────────────
+router.post("/auth/logout", async (req: Request, res: Response) => {
+  const sid = getSessionId(req);
+  await clearSession(res, sid);
+  res.json({ success: true });
+});
+
+// ── GET /auth/google ──────────────────────────────────────────────────────────
+router.get("/auth/google", (req: Request, res: Response) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    res.redirect("/?error=google_not_configured");
+    return;
+  }
+
+  const state = crypto.randomBytes(16).toString("hex");
+  const returnTo =
+    typeof req.query.returnTo === "string" ? req.query.returnTo : "/";
+  const callbackUrl = `${getOrigin(req)}/api/auth/google/callback`;
+
+  const cookieOpts = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: OAUTH_COOKIE_TTL,
+  };
+  res.cookie("google_state", state, cookieOpts);
+  res.cookie("google_return_to", returnTo, cookieOpts);
+
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("redirect_uri", callbackUrl);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", "openid email profile");
+  url.searchParams.set("state", state);
+  url.searchParams.set("access_type", "offline");
+
+  res.redirect(url.toString());
+});
+
+// ── GET /auth/google/callback ─────────────────────────────────────────────────
+router.get("/auth/google/callback", async (req: Request, res: Response) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    res.redirect("/?error=google_not_configured");
+    return;
+  }
+
+  const { code, state } = req.query;
+  const expectedState = req.cookies?.google_state as string | undefined;
+  const returnTo = (req.cookies?.google_return_to as string | undefined) ?? "/";
+
+  res.clearCookie("google_state", { path: "/" });
+  res.clearCookie("google_return_to", { path: "/" });
+
+  if (!code || !state || state !== expectedState) {
+    res.redirect("/?error=google_auth_failed");
+    return;
+  }
+
+  try {
+    const callbackUrl = `${getOrigin(req)}/api/auth/google/callback`;
+
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: code as string,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: callbackUrl,
+        grant_type: "authorization_code",
+      }),
+    });
+
+    const tokens = (await tokenRes.json()) as {
+      access_token?: string;
+      error?: string;
+    };
+
+    if (!tokens.access_token) {
+      res.redirect("/?error=google_token_failed");
+      return;
+    }
+
+    const userInfoRes = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      },
+    );
+    const googleUser = (await userInfoRes.json()) as {
+      id: string;
+      email?: string;
+      given_name?: string;
+      family_name?: string;
+      picture?: string;
+    };
+
+    if (!googleUser.id) {
+      res.redirect("/?error=google_userinfo_failed");
+      return;
+    }
+
+    let dbUser = null;
+
+    const [byGoogleId] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.googleId, googleUser.id));
+
+    if (byGoogleId) {
+      dbUser = byGoogleId;
+    } else if (googleUser.email) {
+      const [byEmail] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.email, googleUser.email.toLowerCase()));
+
+      if (byEmail) {
+        const [updated] = await db
+          .update(usersTable)
+          .set({
+            googleId: googleUser.id,
+            profileImageUrl:
+              googleUser.picture ?? byEmail.profileImageUrl ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(usersTable.id, byEmail.id))
+          .returning();
+        dbUser = updated;
+      }
+    }
+
+    if (!dbUser) {
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          email: googleUser.email?.toLowerCase() ?? null,
+          firstName: googleUser.given_name ?? null,
+          lastName: googleUser.family_name ?? null,
+          profileImageUrl: googleUser.picture ?? null,
+          googleId: googleUser.id,
+        })
+        .returning();
+      dbUser = created;
+    }
+
+    const authUser = buildAuthUser(dbUser);
+    const sid = await createSession({ user: authUser } as SessionData);
+    setSessionCookie(res, sid);
+
+    const safePath = returnTo.startsWith("/") ? returnTo : "/";
+    res.redirect(safePath);
+  } catch (err) {
+    req.log.error({ err }, "Google OAuth callback error");
+    res.redirect("/?error=google_auth_failed");
+  }
+});
+
+// Legacy compat — redirect old OIDC logout URL
+router.get("/logout", async (req: Request, res: Response) => {
+  const sid = getSessionId(req);
+  await clearSession(res, sid);
+  res.redirect("/");
+});
+
+// Keep mobile session logout for any existing mobile clients
 router.post("/mobile-auth/logout", async (req: Request, res: Response) => {
   const sid = getSessionId(req);
-  if (sid) {
-    await deleteSession(sid);
-  }
-  res.json(LogoutMobileSessionResponse.parse({ success: true }));
+  if (sid) await deleteSession(sid);
+  res.json({ success: true });
 });
 
 export default router;
